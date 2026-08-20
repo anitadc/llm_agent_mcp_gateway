@@ -1,0 +1,49 @@
+import uuid
+
+from fastapi import APIRouter, Depends
+
+from app.api.deps import get_current_user, get_project_repo, require_roles
+from app.core.exceptions import NotFoundError
+from app.db.models.enums import UserRole
+from app.db.models.project import Project
+from app.db.models.user import User
+from app.repositories.project_repo import ProjectRepo
+from app.schemas.project import ProjectCreate, ProjectOut, ProjectUpdate
+
+router = APIRouter(prefix="/v1/projects", tags=["projects"])
+
+
+@router.get("", response_model=list[ProjectOut])
+async def list_projects(
+    organization_id: uuid.UUID | None = None,
+    user: User = Depends(get_current_user),
+    repo: ProjectRepo = Depends(get_project_repo),
+) -> list[ProjectOut]:
+    scope = organization_id if user.role == UserRole.admin else user.organization_id
+    return [ProjectOut.model_validate(p) for p in await repo.list_visible(scope)]
+
+
+@router.post("", response_model=ProjectOut, status_code=201)
+async def create_project(
+    body: ProjectCreate,
+    user: User = Depends(require_roles(UserRole.admin, UserRole.team_lead)),
+    repo: ProjectRepo = Depends(get_project_repo),
+) -> ProjectOut:
+    project = await repo.add(Project(organization_id=body.organization_id, name=body.name))
+    return ProjectOut.model_validate(project)
+
+
+@router.patch("/{project_id}", response_model=ProjectOut)
+async def update_project(
+    project_id: uuid.UUID,
+    body: ProjectUpdate,
+    user: User = Depends(require_roles(UserRole.admin, UserRole.team_lead)),
+    repo: ProjectRepo = Depends(get_project_repo),
+) -> ProjectOut:
+    project = await repo.get(project_id)
+    if project is None:
+        raise NotFoundError("Project not found")
+    project.name = body.name
+    await repo.db.flush()
+    await repo.db.refresh(project)
+    return ProjectOut.model_validate(project)

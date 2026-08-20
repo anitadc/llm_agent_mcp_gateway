@@ -1,0 +1,56 @@
+import httpx
+from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_db
+from app.core.config import Settings, get_settings
+from app.db.valkey import valkey_client
+
+router = APIRouter(tags=["health"])
+
+
+@router.get("/health")
+async def get_health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@router.get("/ready")
+async def get_readiness(
+    db: AsyncSession = Depends(get_db), settings: Settings = Depends(get_settings)
+) -> JSONResponse:
+    statuses = {"db": "down", "valkey": "down", "keycloak": "down", "guardrails": "down"}
+
+    try:
+        await db.execute(text("SELECT 1"))
+        statuses["db"] = "ok"
+    except Exception:
+        pass
+
+    try:
+        await valkey_client.ping()
+        statuses["valkey"] = "ok"
+    except Exception:
+        pass
+
+    async with httpx.AsyncClient(timeout=2.0) as client:
+        try:
+            # keycloak_jwks_url (not keycloak_base_url) on purpose: base_url must
+            # match the issuer string embedded in browser-obtained tokens, which
+            # in a Docker Compose deployment is the externally-published host, not
+            # necessarily one this container can reach itself. jwks_url is always
+            # a real network-reachable endpoint, since token validation depends on
+            # actually fetching it -- see identity/base.py::validate_oidc_jwt.
+            resp = await client.get(settings.keycloak_jwks_url)
+            statuses["keycloak"] = "ok" if resp.status_code < 500 else "down"
+        except Exception:
+            pass
+        try:
+            resp = await client.get(f"{settings.guardrails_base_url}/health")
+            statuses["guardrails"] = "ok" if resp.status_code < 500 else "down"
+        except Exception:
+            pass
+
+    status_code = 200 if all(v == "ok" for v in statuses.values()) else 503
+    return JSONResponse(status_code=status_code, content=statuses)
