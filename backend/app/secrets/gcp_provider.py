@@ -2,7 +2,10 @@ import asyncio
 
 from app.core.config import Settings
 from app.core.exceptions import ProviderError
+from app.core.logging import get_logger
 from app.secrets.base import SecretProvider
+
+logger = get_logger(__name__)
 
 
 class GCPSecretProvider(SecretProvider):
@@ -36,7 +39,7 @@ class GCPSecretProvider(SecretProvider):
         return f"projects/{self._project_id}/secrets/{self._secret_id(secret_name, tenant)}"
 
     async def get_secret(self, secret_name: str, tenant: str | None = None) -> str | None:
-        from google.api_core.exceptions import NotFound
+        from google.api_core.exceptions import GoogleAPIError, NotFound
 
         try:
             response = await asyncio.to_thread(
@@ -45,12 +48,13 @@ class GCPSecretProvider(SecretProvider):
             )
         except NotFound:
             return None
-        except Exception as exc:
+        except GoogleAPIError as exc:
+            logger.exception("gcp_secrets_get_failed", secret_name=secret_name, tenant=tenant)
             raise ProviderError(f"GCP Secret Manager get_secret failed: {exc}") from exc
         return response.payload.data.decode("utf-8")
 
     async def set_secret(self, secret_name: str, value: str, tenant: str | None = None) -> None:
-        from google.api_core.exceptions import AlreadyExists, NotFound
+        from google.api_core.exceptions import AlreadyExists, GoogleAPIError, NotFound
 
         resource = self._secret_resource(secret_name, tenant)
         try:
@@ -67,9 +71,11 @@ class GCPSecretProvider(SecretProvider):
                 )
             except AlreadyExists:
                 pass
-            except Exception as exc:
+            except GoogleAPIError as exc:
+                logger.exception("gcp_secrets_create_failed", secret_name=secret_name, tenant=tenant)
                 raise ProviderError(f"GCP Secret Manager create_secret failed: {exc}") from exc
-        except Exception as exc:
+        except GoogleAPIError as exc:
+            logger.exception("gcp_secrets_precheck_failed", secret_name=secret_name, tenant=tenant)
             raise ProviderError(f"GCP Secret Manager get_secret (pre-check) failed: {exc}") from exc
 
         try:
@@ -77,11 +83,12 @@ class GCPSecretProvider(SecretProvider):
                 self._resolved_client.add_secret_version,
                 request={"parent": resource, "payload": {"data": value.encode("utf-8")}},
             )
-        except Exception as exc:
+        except GoogleAPIError as exc:
+            logger.exception("gcp_secrets_add_version_failed", secret_name=secret_name, tenant=tenant)
             raise ProviderError(f"GCP Secret Manager add_secret_version failed: {exc}") from exc
 
     async def delete_secret(self, secret_name: str, tenant: str | None = None) -> None:
-        from google.api_core.exceptions import NotFound
+        from google.api_core.exceptions import GoogleAPIError, NotFound
 
         try:
             await asyncio.to_thread(
@@ -89,5 +96,6 @@ class GCPSecretProvider(SecretProvider):
             )
         except NotFound:
             pass
-        except Exception as exc:
+        except GoogleAPIError as exc:
+            logger.exception("gcp_secrets_delete_failed", secret_name=secret_name, tenant=tenant)
             raise ProviderError(f"GCP Secret Manager delete_secret failed: {exc}") from exc

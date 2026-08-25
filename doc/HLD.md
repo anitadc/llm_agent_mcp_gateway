@@ -142,7 +142,7 @@ Every provider validates a bearer token (RS256, JWKS-based) and resolves it into
 
 ### 4.4 Secret Management Layer
 
-A parallel `SecretProvider` abstraction resolves every credential the gateway needs — LLM provider keys, MCP server outbound auth, identity-provider client secrets — from exactly one configured backend, never from scattered plain environment variables. **Five backends are implemented**: Infisical (default), AWS Secrets Manager, Azure Key Vault, Google Secret Manager, and HashiCorp Vault. Resolved values are cached briefly and never persisted to the application database or logged.
+A parallel `SecretProvider` abstraction resolves every credential the gateway needs — LLM provider keys, MCP server outbound auth, identity-provider client secrets — from exactly one configured backend, never from scattered plain environment variables. **Five backends are implemented**: this app's own Postgres database (default, values Fernet-encrypted at rest), AWS Secrets Manager, Azure Key Vault, Google Secret Manager, and HashiCorp Vault. Resolved values are cached briefly and never persisted to the application database in plaintext or logged.
 
 ### 4.5 Policy and Governance Layer
 

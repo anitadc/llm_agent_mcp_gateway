@@ -1,7 +1,10 @@
 from app.core.config import Settings, get_settings
+from app.core.logging import get_logger
 from app.secrets.base import SecretProvider
 
-PROVIDER_NAMES = ["infisical", "aws", "gcp", "azure", "vault"]
+logger = get_logger(__name__)
+
+PROVIDER_NAMES = ["postgres", "aws", "gcp", "azure", "vault"]
 
 
 def get_secret_provider(settings: Settings | None = None) -> SecretProvider:
@@ -12,10 +15,10 @@ def get_secret_provider(settings: Settings | None = None) -> SecretProvider:
     settings = settings or get_settings()
     provider = settings.secret_provider
 
-    if provider == "infisical":
-        from app.secrets.infisical_provider import InfisicalProvider
+    if provider == "postgres":
+        from app.secrets.postgres_provider import PostgresSecretProvider
 
-        return InfisicalProvider(settings)
+        return PostgresSecretProvider(settings)
     if provider == "aws":
         from app.secrets.aws_provider import AWSSecretsProvider
 
@@ -33,6 +36,7 @@ def get_secret_provider(settings: Settings | None = None) -> SecretProvider:
 
         return VaultProvider(settings)
 
+    logger.error("unknown_secret_provider", provider=provider)
     raise ValueError(f"Unknown SECRET_PROVIDER '{provider}'")
 
 
@@ -40,8 +44,8 @@ def is_provider_available(name: str, settings: Settings) -> bool:
     """Static config-presence check (NOT a live connectivity probe) -- just
     enough for the admin UI to show which providers this deployment is even
     configured for, without making an outbound call on every page load."""
-    if name == "infisical":
-        return bool(settings.infisical_client_id and settings.infisical_client_secret and settings.infisical_project_id)
+    if name == "postgres":
+        return bool(settings.secret_storage_encryption_key)
     if name == "aws":
         return bool(settings.aws_secrets_region)
     if name == "gcp":

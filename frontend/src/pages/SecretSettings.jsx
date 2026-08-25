@@ -8,7 +8,7 @@ import { usePagination } from "../hooks/usePagination";
 import { endpoints } from "../services/api";
 
 const PROVIDER_LABELS = {
-  infisical: "Infisical",
+  postgres: "PostgreSQL",
   aws: "AWS Secrets Manager",
   gcp: "Google Secret Manager",
   azure: "Azure Key Vault",

@@ -2,6 +2,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 
 from app.api.deps import get_secret_audit_log_repo, get_secret_service, require_roles
 from app.core.config import Settings, get_settings
+from app.core.exceptions import ProviderError
+from app.core.logging import get_logger
 from app.db.models.enums import SecretAuditStatus, SecretOperation, UserRole
 from app.db.models.user import User
 from app.repositories.secret_audit_log_repo import SecretAuditLogRepo
@@ -17,6 +19,8 @@ from app.schemas.secret import (
 from app.secrets.factory import list_provider_metadata
 from app.secrets.service import SecretService
 from app.services.logging_service import record_secret_audit
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/admin/secrets", tags=["secrets"])
 
@@ -63,7 +67,8 @@ async def get_secret_status(
         try:
             values = [await secret_service.get_secret(name) for name in secret_names]
             status = "configured" if all(values) else "not_configured"
-        except Exception:
+        except ProviderError:
+            logger.exception("secret_status_check_failed", provider=label)
             status = "error"
             audit_status = SecretAuditStatus.error
         results.append(SecretStatusOut(provider=label, status=status))
@@ -89,7 +94,7 @@ async def rotate_secret(
     settings: Settings = Depends(get_settings),
 ) -> SecretRotateResponse:
     """Manual rotation support: invalidates the cached value and re-fetches from
-    the provider (force_refresh=True), so a secret rotated in Infisical/AWS/GCP/
+    the provider (force_refresh=True), so a secret rotated in Postgres/AWS/GCP/
     Azure/Vault takes effect immediately instead of waiting out the cache TTL."""
     audit_status = SecretAuditStatus.success
     try:
@@ -97,7 +102,8 @@ async def rotate_secret(
         status: str = "rotated" if value is not None else "error"
         if value is None:
             audit_status = SecretAuditStatus.error
-    except Exception:
+    except ProviderError:
+        logger.exception("secret_rotate_failed", secret_name=body.secret_name, tenant=body.tenant)
         status = "error"
         audit_status = SecretAuditStatus.error
 
