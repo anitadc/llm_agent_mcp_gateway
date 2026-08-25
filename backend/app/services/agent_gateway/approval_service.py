@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from app.core.exceptions import BadRequestError
+from app.core.logging import get_logger
 from app.db.models.agent import Agent
 from app.db.models.agent_approval_task import AgentApprovalTask
 from app.db.models.enums import AgentApprovalDecision, AgentApprovalStage, AgentLifecycleStatus, AgentRiskClass
@@ -9,6 +10,8 @@ from app.repositories.agent_approval_task_repo import AgentApprovalTaskRepo
 from app.repositories.agent_repo import AgentRepo
 from app.services.agent_gateway import lifecycle
 from app.services.agent_gateway.agent_registry_service import validate_agent_card
+
+logger = get_logger(__name__)
 
 
 class ApprovalService:
@@ -37,12 +40,19 @@ class ApprovalService:
         if problems:
             agent.status = AgentLifecycleStatus.rejected
             await self.agent_repo.db.flush()
+            logger.warning("agent_card_validation_failed", agent_key=agent.agent_key, problems=problems)
             raise BadRequestError(f"Agent Card validation failed for '{agent.agent_key}': {'; '.join(problems)}")
 
         agent.status = AgentLifecycleStatus.under_review
-        for stage in self.required_stages(agent):
+        stages = self.required_stages(agent)
+        for stage in stages:
             self.task_repo.db.add(AgentApprovalTask(agent_id=agent.id, stage=stage))
         await self.agent_repo.db.flush()
+        logger.info(
+            "agent_submitted_for_approval",
+            agent_key=agent.agent_key,
+            stages=[s.value for s in stages],
+        )
         return agent
 
     async def decide(
@@ -58,12 +68,19 @@ class ApprovalService:
         await self.task_repo.db.flush()
 
         agent = task.agent
+        logger.info(
+            "agent_approval_task_decided",
+            agent_key=agent.agent_key,
+            stage=task.stage.value,
+            approved=approved,
+        )
         if not approved:
             # A single rejected stage rejects the whole registration -- the
             # spec's review sub-stages (SECURITY/TECHNICAL/BUSINESS/...) are
             # gates, not votes.
             agent.status = AgentLifecycleStatus.rejected
             await self.agent_repo.db.flush()
+            logger.info("agent_rejected", agent_key=agent.agent_key, stage=task.stage.value)
             return task
 
         sibling_tasks = await self.task_repo.list_by_agent(agent.id)
@@ -71,4 +88,5 @@ class ApprovalService:
             lifecycle.require_transition(agent.status, AgentLifecycleStatus.approved)
             agent.status = AgentLifecycleStatus.approved
             await self.agent_repo.db.flush()
+            logger.info("agent_approved", agent_key=agent.agent_key)
         return task

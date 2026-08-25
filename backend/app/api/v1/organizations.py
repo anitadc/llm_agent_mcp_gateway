@@ -4,11 +4,14 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_organization_repo, require_roles
 from app.core.exceptions import NotFoundError
+from app.core.logging import get_logger
 from app.db.models.enums import UserRole
 from app.db.models.organization import Organization
 from app.db.models.user import User
 from app.repositories.organization_repo import OrganizationRepo
 from app.schemas.organization import OrganizationCreate, OrganizationOut, OrganizationUpdate
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/v1/organizations", tags=["organizations"])
 
@@ -27,6 +30,7 @@ async def create_organization(
     repo: OrganizationRepo = Depends(get_organization_repo),
 ) -> OrganizationOut:
     org = await repo.add(Organization(name=body.name))
+    logger.info("organization_created", organization_id=str(org.id))
     return OrganizationOut.model_validate(org)
 
 
@@ -43,4 +47,5 @@ async def update_organization(
     org.name = body.name
     await repo.db.flush()
     await repo.db.refresh(org)
+    logger.info("organization_updated", organization_id=str(organization_id))
     return OrganizationOut.model_validate(org)

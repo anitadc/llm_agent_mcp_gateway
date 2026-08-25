@@ -4,11 +4,14 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_provider_config_repo, require_roles
 from app.core.exceptions import NotFoundError
+from app.core.logging import get_logger
 from app.db.models.enums import UserRole
 from app.db.models.provider_config import ProviderConfig
 from app.db.models.user import User
 from app.repositories.provider_config_repo import ProviderConfigRepo
 from app.schemas.provider_config import ProviderConfigCreate, ProviderConfigOut, ProviderConfigUpdate
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/v1/provider-configs", tags=["provider_configs"])
 
@@ -31,6 +34,7 @@ async def create_provider_config(
             provider=body.provider, display_name=body.display_name, credential_ref=body.credential_ref, enabled=body.enabled
         )
     )
+    logger.info("provider_config_created", provider_config_id=str(config.id), provider=config.provider, enabled=config.enabled)
     return ProviderConfigOut.model_validate(config)
 
 
@@ -52,4 +56,5 @@ async def update_provider_config(
         config.enabled = body.enabled
     await repo.db.flush()
     await repo.db.refresh(config)
+    logger.info("provider_config_updated", provider_config_id=str(provider_config_id), enabled=config.enabled)
     return ProviderConfigOut.model_validate(config)

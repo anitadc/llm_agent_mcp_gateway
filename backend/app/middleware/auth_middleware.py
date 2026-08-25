@@ -6,6 +6,7 @@ from starlette.responses import JSONResponse, Response
 
 from app.core.config import get_settings
 from app.core.exceptions import AuthError, GatewayException
+from app.core.logging import get_logger
 from app.db.models.api_key import ApiKey
 from app.db.models.user import User
 from app.db.session import async_session_factory
@@ -17,6 +18,8 @@ from app.repositories.tenant_identity_config_repo import TenantIdentityConfigRep
 from app.repositories.user_repo import UserRepo
 from app.services.auth_service import AuthService
 from app.services.cache_service import CacheService
+
+logger = get_logger(__name__)
 
 UNAUTHENTICATED_PATHS = {"/health", "/ready", "/docs", "/openapi.json", "/redoc"}
 
@@ -60,8 +63,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     request.state.principal = Principal(kind="user", user=user, identity=identity)
                 await session.commit()
             except GatewayException as exc:
+                logger.warning("auth_failed", path=request.url.path, code=exc.code, message=exc.message)
                 return _error_response(request, exc)
-            except Exception:
+            except Exception as exc:
+                logger.exception("auth_failed_unexpected", path=request.url.path, error_type=type(exc).__name__)
                 return _error_response(request, AuthError("Invalid or expired credentials"))
 
         return await call_next(request)

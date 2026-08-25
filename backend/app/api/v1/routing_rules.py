@@ -4,11 +4,14 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_routing_rule_repo, require_roles
 from app.core.exceptions import NotFoundError
+from app.core.logging import get_logger
 from app.db.models.enums import UserRole
 from app.db.models.routing_rule import RoutingRule
 from app.db.models.user import User
 from app.repositories.routing_rule_repo import RoutingRuleRepo
 from app.schemas.routing_rule import RoutingRuleCreate, RoutingRuleOut, RoutingRuleUpdate
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/v1/routing-rules", tags=["routing_rules"])
 
@@ -38,6 +41,7 @@ async def create_routing_rule(
             is_active=body.is_active,
         )
     )
+    logger.info("routing_rule_created", rule_id=str(rule.id), model_alias=rule.model_alias, strategy=rule.strategy.value)
     return RoutingRuleOut.model_validate(rule)
 
 
@@ -61,4 +65,5 @@ async def update_routing_rule(
         rule.is_active = body.is_active
     await repo.db.flush()
     await repo.db.refresh(rule)
+    logger.info("routing_rule_updated", rule_id=str(rule_id))
     return RoutingRuleOut.model_validate(rule)

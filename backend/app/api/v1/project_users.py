@@ -4,11 +4,14 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_user, get_project_user_repo, require_roles
 from app.core.exceptions import NotFoundError
+from app.core.logging import get_logger
 from app.db.models.enums import UserRole
 from app.db.models.project_user import ProjectUser
 from app.db.models.user import User
 from app.repositories.project_user_repo import ProjectUserRepo
 from app.schemas.project_user import ProjectUserCreate, ProjectUserOut, ProjectUserUpdate
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/v1/project-users", tags=["project_users"])
 
@@ -33,6 +36,7 @@ async def add_project_user(
     if body.start_date is not None:
         kwargs["start_date"] = body.start_date
     membership = await repo.add(ProjectUser(**kwargs))
+    logger.info("project_user_added", project_user_id=str(membership.id), project_id=str(body.project_id))
     return ProjectUserOut.model_validate(membership)
 
 
@@ -52,4 +56,5 @@ async def update_project_user(
         membership.end_date = body.end_date
     await repo.db.flush()
     await repo.db.refresh(membership)
+    logger.info("project_user_updated", project_user_id=str(project_user_id))
     return ProjectUserOut.model_validate(membership)

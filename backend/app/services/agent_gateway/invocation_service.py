@@ -4,11 +4,14 @@ from typing import Any
 import httpx
 
 from app.core.config import Settings
+from app.core.logging import get_logger
 from app.db.models.agent import Agent
 from app.db.models.enums import AgentLifecycleStatus, RequestStatus
 from app.repositories.agent_repo import AgentRepo
 from app.secrets.service import SecretService
 from app.services.policy_engine import PolicyEngine
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -52,6 +55,7 @@ class AgentInvocationService:
     ) -> AgentInvocationResult:
         candidates = await self.agent_repo.list_by_capability(capability, AgentLifecycleStatus.active)
         if not candidates:
+            logger.warning("agent_invocation_no_active_agent", capability=capability)
             return AgentInvocationResult(
                 agent=None,
                 authorization_decision="no_active_agent",
@@ -67,6 +71,7 @@ class AgentInvocationService:
             if decision.allowed:
                 return await self._dispatch(agent, operation, payload)
 
+        logger.warning("agent_invocation_denied", capability=capability, roles=roles, identity_provider=identity_provider)
         return AgentInvocationResult(
             agent=None,
             authorization_decision="denied",
@@ -90,7 +95,8 @@ class AgentInvocationService:
         try:
             async with httpx.AsyncClient(timeout=self.settings.agent_invocation_timeout_seconds) as client:
                 response = await client.post(agent.endpoint_url, json=body, headers=headers)
-        except Exception as exc:
+        except httpx.HTTPError as exc:
+            logger.exception("agent_invocation_request_failed", agent_key=agent.agent_key)
             return AgentInvocationResult(
                 agent=agent,
                 authorization_decision="allowed",
@@ -104,6 +110,9 @@ class AgentInvocationService:
         # gateway failure -- same "is_error, don't raise" treatment RestExecutor
         # gives a REST-backed MCP tool's response.
         if response.status_code >= 400:
+            logger.warning(
+                "agent_invocation_error_response", agent_key=agent.agent_key, status_code=response.status_code
+            )
             return AgentInvocationResult(
                 agent=agent,
                 authorization_decision="allowed",
@@ -111,6 +120,7 @@ class AgentInvocationService:
                 result=parsed,
                 error=f"Agent responded with HTTP {response.status_code}",
             )
+        logger.info("agent_invocation_succeeded", agent_key=agent.agent_key, agent_version=agent.version)
         return AgentInvocationResult(
             agent=agent, authorization_decision="allowed", status=RequestStatus.success, result=parsed, error=None
         )

@@ -4,11 +4,14 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_user, get_project_repo, require_roles
 from app.core.exceptions import NotFoundError
+from app.core.logging import get_logger
 from app.db.models.enums import UserRole
 from app.db.models.project import Project
 from app.db.models.user import User
 from app.repositories.project_repo import ProjectRepo
 from app.schemas.project import ProjectCreate, ProjectOut, ProjectUpdate
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/v1/projects", tags=["projects"])
 
@@ -30,6 +33,7 @@ async def create_project(
     repo: ProjectRepo = Depends(get_project_repo),
 ) -> ProjectOut:
     project = await repo.add(Project(organization_id=body.organization_id, name=body.name))
+    logger.info("project_created", project_id=str(project.id), organization_id=str(body.organization_id))
     return ProjectOut.model_validate(project)
 
 
@@ -46,4 +50,5 @@ async def update_project(
     project.name = body.name
     await repo.db.flush()
     await repo.db.refresh(project)
+    logger.info("project_updated", project_id=str(project_id))
     return ProjectOut.model_validate(project)

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_health_checker, get_mcp_request_log_repo, get_mcp_server_repo, require_roles
 from app.core.exceptions import NotFoundError
+from app.core.logging import get_logger
 from app.db.models.enums import UserRole
 from app.db.models.mcp_server import McpServer
 from app.db.models.user import User
@@ -11,6 +12,8 @@ from app.repositories.mcp_request_log_repo import McpRequestLogRepo
 from app.repositories.mcp_server_repo import McpServerRepo
 from app.schemas.mcp import McpServerCreate, McpServerOut, McpServerStatsOut, McpServerUpdate
 from app.services.mcp.health_checker import HealthChecker
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/mcp/servers", tags=["mcp_servers"])
 
@@ -39,6 +42,13 @@ async def create_mcp_server(
             extra_metadata=body.metadata,
         )
     )
+    logger.info(
+        "mcp_server_created",
+        server_id=str(server.id),
+        server_name=server.name,
+        base_url=server.base_url,
+        user_id=str(user.id),
+    )
     return McpServerOut.from_model(server)
 
 
@@ -64,6 +74,12 @@ async def update_mcp_server(
         server.extra_metadata = body.metadata
     await repo.db.flush()
     await repo.db.refresh(server)
+    logger.info(
+        "mcp_server_updated",
+        server_id=str(server.id),
+        server_name=server.name,
+        user_id=str(user.id),
+    )
     return McpServerOut.from_model(server)
 
 
@@ -76,6 +92,7 @@ async def delete_mcp_server(
     server = await repo.get(server_id)
     if server is None:
         raise NotFoundError("MCP server not found")
+    logger.info("mcp_server_deleted", server_id=str(server.id), server_name=server.name, user_id=str(user.id))
     await repo.delete(server)
 
 
@@ -90,6 +107,13 @@ async def trigger_health_check(
     if server is None:
         raise NotFoundError("MCP server not found")
     await health_checker.probe(server)
+    logger.info(
+        "mcp_server_health_check_triggered",
+        server_id=str(server.id),
+        server_name=server.name,
+        health_status=str(server.health_status),
+        user_id=str(user.id),
+    )
     return McpServerOut.from_model(server)
 
 

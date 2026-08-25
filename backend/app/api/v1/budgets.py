@@ -5,12 +5,15 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_budget_repo, get_cost_ledger_repo, require_roles
 from app.core.exceptions import NotFoundError
+from app.core.logging import get_logger
 from app.db.models.budget import Budget
 from app.db.models.enums import BudgetPeriod, UserRole
 from app.db.models.user import User
 from app.repositories.budget_repo import BudgetRepo
 from app.repositories.cost_ledger_repo import CostLedgerRepo
 from app.schemas.budget import BudgetCreate, BudgetOut, BudgetUpdate
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/v1/budgets", tags=["budgets"])
 
@@ -73,6 +76,7 @@ async def create_budget(
             alert_threshold_pct=body.alert_threshold_pct,
         )
     )
+    logger.info("budget_created", budget_id=str(budget.id), period=budget.period.value)
     return await _to_out(budget, cost_ledger_repo)
 
 
@@ -95,6 +99,7 @@ async def update_budget(
         budget.alert_threshold_pct = body.alert_threshold_pct
     await repo.db.flush()
     await repo.db.refresh(budget)
+    logger.info("budget_updated", budget_id=str(budget_id))
     return await _to_out(budget, cost_ledger_repo)
 
 
@@ -108,3 +113,4 @@ async def delete_budget(
     if budget is None:
         raise NotFoundError("Budget not found")
     await repo.delete(budget)
+    logger.info("budget_deleted", budget_id=str(budget_id))

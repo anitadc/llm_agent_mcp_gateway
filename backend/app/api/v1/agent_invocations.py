@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from app.api.deps import get_agent_invocation_repo, get_agent_invocation_service, get_current_principal, get_policy_engine
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ForbiddenError
+from app.core.logging import get_logger
 from app.middleware.auth_middleware import Principal
 from app.repositories.agent_invocation_repo import AgentInvocationRepo
 from app.schemas.agent import AgentInvocationOut, InvokeRequest, InvokeResponse
@@ -13,6 +14,8 @@ from app.services.agent_gateway.invocation_service import AgentInvocationService
 from app.services.logging_service import record_agent_invocation
 from app.services.policy_engine import PolicyEngine
 from app.services.rate_limit_service import RateLimitService
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/v1/agent-invocations", tags=["agent_gateway"])
 
@@ -42,9 +45,11 @@ async def invoke_agent(
     request_id = request.state.request_id
     start = time.perf_counter()
     project_id, api_key_id, user_id = _identity(principal)
+    logger.info("agent_invocation_requested", request_id=str(request_id), capability=body.capability)
 
     if principal.kind == "api_key":
         if "agent:invoke" not in (principal.api_key.scopes or []):
+            logger.warning("agent_invocation_forbidden", request_id=str(request_id), capability=body.capability)
             raise ForbiddenError("Missing required scope 'agent:invoke'")
         roles: list[str] = []
         identity_provider = None
@@ -75,6 +80,15 @@ async def invoke_agent(
         agent_id=result.agent.id if result.agent else None,
         authorization_decision=result.authorization_decision,
         status=result.status,
+        latency_ms=int((time.perf_counter() - start) * 1000),
+    )
+
+    logger.info(
+        "agent_invocation_completed",
+        request_id=str(request_id),
+        target_agent_key=result.agent.agent_key if result.agent else None,
+        status=result.status.value,
+        authorization_decision=result.authorization_decision,
         latency_ms=int((time.perf_counter() - start) * 1000),
     )
 
