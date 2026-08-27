@@ -1,14 +1,14 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     app_name: str = "llm-gateway"
     environment: Literal["local", "staging", "prod"] = "local"
-    log_level: str = "INFO"
+    log_level: str = "DEBUG"
 
     database_url: str
 
@@ -74,16 +74,30 @@ class Settings(BaseSettings):
     api_key_secret_pepper: str
 
     # --- Secret Provider layer (app/secrets/) ---
-    secret_provider: Literal["postgres", "aws", "gcp", "azure", "vault"] = "postgres"
+    # Accept an explicitly empty value from Compose/environment when no backend is
+    # configured for this deployment. "unset" is a valid state for local/dev stacks
+    # that only use plain env vars or a different secret source.
+    secret_provider: Literal["infisical", "aws", "gcp", "azure", "vault"] | None = None
     # Redis/Valkey cache TTL for resolved secret values -- bounds how long a
     # provider outage or a rotated-but-not-yet-invalidated value can linger.
     secret_cache_ttl_seconds: int = 300
 
-    # Fernet key (Fernet.generate_key()) encrypting values stored by
-    # PostgresSecretProvider -- required only when secret_provider="postgres".
-    # Never derived from another secret here: rotating this key independently
-    # of everything else is exactly the point.
-    secret_storage_encryption_key: str | None = None
+    @field_validator("secret_provider", mode="before")
+    @classmethod
+    def normalize_secret_provider(cls, value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"", "none", "null"}:
+                return None
+        return value
+
+    infisical_site_url: str # = "https://app.infisical.com"
+    infisical_client_id: str | None = None
+    infisical_client_secret: str | None = None
+    infisical_project_id: str | None = None
+    infisical_environment: str = "prod"
 
     aws_secrets_region: str | None = None
     aws_secret_name_prefix: str = "llm-gateway"

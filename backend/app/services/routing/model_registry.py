@@ -3,10 +3,7 @@ from typing import Any
 import litellm
 
 from app.core.config import Settings
-from app.core.logging import get_logger
 from app.secrets.service import SecretService
-
-logger = get_logger(__name__)
 
 # Which secret name(s) each provider needs, and which litellm_params key each
 # resolved value fills in. Region is NOT a secret (see Settings.aws_region_name)
@@ -47,9 +44,4 @@ async def build_router(
     for target in targets:
         litellm_params = await _litellm_params_for(target["provider"], target["model"], settings, secret_service)
         model_list.append({"model_name": model_alias, "litellm_params": litellm_params})
-    logger.info(
-        "router_built",
-        model_alias=model_alias,
-        providers=[target["provider"] for target in targets],
-    )
     return litellm.Router(model_list=model_list, routing_strategy="simple-shuffle", num_retries=1)

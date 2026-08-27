@@ -2,7 +2,6 @@ import uuid
 from typing import Any
 
 from app.core.exceptions import BadRequestError
-from app.core.logging import get_logger
 from app.db.models.api_endpoint import ApiEndpoint
 from app.db.models.enums import McpToolSourceType, RestHttpMethod
 from app.db.models.mcp_tool import McpTool
@@ -11,8 +10,6 @@ from app.repositories.api_service_repo import ApiServiceRepo
 from app.repositories.mcp_tool_repo import McpToolRepo
 from app.services.api_registry.rest_executor import RestExecutionResult, RestExecutor
 from app.services.api_registry.schema_converter import endpoint_to_input_schema
-
-logger = get_logger(__name__)
 
 
 class ApiRegistryService:
@@ -48,9 +45,6 @@ class ApiRegistryService:
     ) -> ApiEndpoint:
         existing = await self.tool_repo.get_by_name(tool_name)
         if existing is not None:
-            logger.warning(
-                "api_endpoint_registration_conflict", tool_name=tool_name, existing_source=existing.source_type.value
-            )
             raise BadRequestError(f"Tool name '{tool_name}' is already registered (source: {existing.source_type.value})")
 
         endpoint = await self.endpoint_repo.add(
@@ -65,7 +59,6 @@ class ApiRegistryService:
             )
         )
         await self._sync_tool(endpoint)
-        logger.info("api_endpoint_registered", tool_name=tool_name, api_service_id=str(api_service_id))
         return await self.endpoint_repo.get(endpoint.id)
 
     async def update_endpoint(
@@ -91,13 +84,11 @@ class ApiRegistryService:
         await self.endpoint_repo.db.flush()
         await self.endpoint_repo.db.refresh(endpoint)
         await self._sync_tool(endpoint)
-        logger.info("api_endpoint_updated", tool_name=endpoint.tool_name, endpoint_id=str(endpoint.id))
         return endpoint
 
     async def delete_endpoint(self, endpoint: ApiEndpoint) -> None:
         # The paired McpTool row cascades via api_endpoint_id's ondelete=CASCADE.
         await self.endpoint_repo.delete(endpoint)
-        logger.info("api_endpoint_deleted", tool_name=endpoint.tool_name, endpoint_id=str(endpoint.id))
 
     async def _sync_tool(self, endpoint: ApiEndpoint) -> None:
         """Regenerates the endpoint's paired McpTool row's input_schema/enabled

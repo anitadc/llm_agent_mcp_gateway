@@ -1,7 +1,6 @@
 import time
 from datetime import datetime, timezone
 
-from app.core.logging import get_logger
 from app.db.models.enums import McpSyncStatus
 from app.db.models.mcp_server import McpServer
 from app.db.models.mcp_tool import McpTool
@@ -9,8 +8,6 @@ from app.repositories.mcp_server_repo import McpServerRepo
 from app.repositories.mcp_tool_repo import McpToolRepo
 from app.services.mcp.health_checker import HealthChecker
 from app.services.mcp.mcp_client import McpClient
-
-logger = get_logger(__name__)
 
 
 class DiscoveryService:
@@ -35,12 +32,6 @@ class DiscoveryService:
             if init_result is None:
                 server.last_sync_status = McpSyncStatus.error
                 server.last_sync_error = f"Server '{server.name}' failed its liveness probe; tools/list skipped"
-                logger.warning(
-                    "mcp_server_sync_skipped",
-                    server_id=str(server.id),
-                    server_name=server.name,
-                    reason="liveness_probe_failed",
-                )
                 return server
 
             server.protocol_version = (
@@ -50,20 +41,9 @@ class DiscoveryService:
             await self._reconcile_tools(server, tools)
             server.last_sync_status = McpSyncStatus.success
             server.last_sync_error = None
-            logger.info(
-                "mcp_server_synced",
-                server_id=str(server.id),
-                server_name=server.name,
-                tool_count=len(tools),
-            )
         except Exception as exc:
             server.last_sync_status = McpSyncStatus.error
             server.last_sync_error = str(exc)[:2000]
-            logger.exception(
-                "mcp_server_sync_failed",
-                server_id=str(server.id),
-                server_name=server.name,
-            )
         finally:
             server.last_sync_at = datetime.now(timezone.utc)
             server.last_sync_latency_ms = int((time.perf_counter() - start) * 1000)

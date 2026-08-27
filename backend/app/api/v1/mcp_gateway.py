@@ -16,7 +16,7 @@ from app.api.deps import (
     mcp_scopes_for,
 )
 from app.core.config import Settings, get_settings
-from app.core.exceptions import BadRequestError, ForbiddenError, GatewayException
+from app.core.exceptions import BadRequestError, ForbiddenError
 from app.core.logging import get_logger
 from app.db.models.enums import McpToolSourceType, RequestStatus
 from app.db.models.mcp_session import McpSession
@@ -34,9 +34,8 @@ from app.services.mcp.session_manager import SessionManager
 from app.services.policy_engine import PolicyEngine
 from app.services.rate_limit_service import RateLimitService
 
-logger = get_logger(__name__)
-
 router = APIRouter(tags=["mcp_gateway"])
+logger = get_logger(__name__)
 
 
 def _identity(principal: Principal) -> tuple[uuid.UUID | None, uuid.UUID | None, uuid.UUID | None]:
@@ -86,6 +85,16 @@ async def mcp_gateway(
     start = time.perf_counter()
     project_id, api_key_id, user_id = _identity(principal)
     client_session_id = request.headers.get(MCP_SESSION_HEADER)
+    logger.info(
+        "MCP gateway request received",
+        request_id=request_id,
+        principal_kind=principal.kind,
+        method=body.method,
+        api_key_id=api_key_id,
+        user_id=user_id,
+        project_id=str(project_id) if project_id else None,
+        client_session_id=client_session_id,
+    )
 
     status = RequestStatus.success
     tool_name: str | None = None
@@ -161,28 +170,19 @@ async def mcp_gateway(
 
         if client_session_id:
             response.headers[MCP_SESSION_HEADER] = client_session_id
+        logger.info(
+            "MCP gateway request completed",
+            request_id=request_id,
+            method=body.method,
+            status=status.value,
+            tool_name=tool_name,
+            server_id=str(server_id) if server_id else None,
+            latency_ms=int((time.perf_counter() - start) * 1000),
+        )
         return JsonRpcResponse(id=body.id, result=result)
-    except Exception as exc:
-        # Broad on purpose: this must catch both expected GatewayExceptions (bad
-        # request, forbidden, unavailable tool, ...) and genuine bugs so `status`
-        # is always correct for record_mcp_request below. Severity of the log
-        # reflects which kind actually happened.
+    except Exception:
         if status == RequestStatus.success:
             status = RequestStatus.error
-        if isinstance(exc, GatewayException) and exc.status_code < 500:
-            logger.warning(
-                "mcp_gateway_request_rejected",
-                method=body.method,
-                tool_name=tool_name,
-                error_code=exc.code,
-            )
-        else:
-            logger.exception(
-                "mcp_gateway_request_failed",
-                method=body.method,
-                tool_name=tool_name,
-                server_id=str(server_id) if server_id else None,
-            )
         raise
     finally:
         background_tasks.add_task(

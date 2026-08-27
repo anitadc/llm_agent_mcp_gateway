@@ -62,7 +62,7 @@ class _FakeProvider:
 async def test_cache_miss_falls_through_to_provider_and_populates_cache() -> None:
     provider = _FakeProvider({"OPENAI_API_KEY": "sk-1"})
     redis = _FakeRedis()
-    service = SecretService(provider, "postgres", _settings(), client=redis)
+    service = SecretService(provider, "infisical", _settings(), client=redis)
 
     value = await service.get_secret("OPENAI_API_KEY")
 
@@ -75,7 +75,7 @@ async def test_cache_miss_falls_through_to_provider_and_populates_cache() -> Non
 async def test_cache_hit_never_calls_the_provider() -> None:
     provider = _FakeProvider({"OPENAI_API_KEY": "sk-1"})
     redis = _FakeRedis()
-    service = SecretService(provider, "postgres", _settings(), client=redis)
+    service = SecretService(provider, "infisical", _settings(), client=redis)
 
     await service.get_secret("OPENAI_API_KEY")  # warms cache
     provider.get_calls = 0  # reset counter
@@ -90,7 +90,7 @@ async def test_force_refresh_bypasses_cache_and_rewarms_it() -> None:
     provider = _FakeProvider({"OPENAI_API_KEY": "sk-rotated"})
     redis = _FakeRedis()
     redis.store["secret:default:OPENAI_API_KEY"] = "sk-stale"
-    service = SecretService(provider, "postgres", _settings(), client=redis)
+    service = SecretService(provider, "infisical", _settings(), client=redis)
 
     value = await service.get_secret("OPENAI_API_KEY", force_refresh=True)
 
@@ -103,7 +103,7 @@ async def test_force_refresh_bypasses_cache_and_rewarms_it() -> None:
 async def test_tenant_scopes_the_cache_key() -> None:
     provider = _FakeProvider({"tenant-a:OPENAI_API_KEY": "sk-tenant-a"})
     redis = _FakeRedis()
-    service = SecretService(provider, "postgres", _settings(), client=redis)
+    service = SecretService(provider, "infisical", _settings(), client=redis)
 
     value = await service.get_secret("OPENAI_API_KEY", tenant="tenant-a")
 
@@ -117,7 +117,7 @@ async def test_set_secret_invalidates_the_cache_instead_of_prewarming_it() -> No
     provider = _FakeProvider({})
     redis = _FakeRedis()
     redis.store["secret:default:OPENAI_API_KEY"] = "sk-old"
-    service = SecretService(provider, "postgres", _settings(), client=redis)
+    service = SecretService(provider, "infisical", _settings(), client=redis)
 
     await service.set_secret("OPENAI_API_KEY", "sk-new")
 
@@ -130,7 +130,7 @@ async def test_delete_secret_invalidates_the_cache() -> None:
     provider = _FakeProvider({})
     redis = _FakeRedis()
     redis.store["secret:default:OPENAI_API_KEY"] = "sk-old"
-    service = SecretService(provider, "postgres", _settings(), client=redis)
+    service = SecretService(provider, "infisical", _settings(), client=redis)
 
     await service.delete_secret("OPENAI_API_KEY")
 
@@ -142,7 +142,7 @@ async def test_delete_secret_invalidates_the_cache() -> None:
 async def test_missing_secret_is_not_cached() -> None:
     provider = _FakeProvider({})
     redis = _FakeRedis()
-    service = SecretService(provider, "postgres", _settings(), client=redis)
+    service = SecretService(provider, "infisical", _settings(), client=redis)
 
     value = await service.get_secret("DOES_NOT_EXIST")
 

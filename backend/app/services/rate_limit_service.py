@@ -4,10 +4,7 @@ import redis.asyncio as redis
 
 from app.core.config import get_settings
 from app.core.exceptions import RateLimitError
-from app.core.logging import get_logger
 from app.db.valkey import valkey_client
-
-logger = get_logger(__name__)
 
 _INCR_AND_EXPIRE = """
 local current = redis.call('INCR', KEYS[1])
@@ -29,14 +26,6 @@ class RateLimitService:
     async def check(self, key_id: str, limit_per_window: int = DEFAULT_REQUESTS_PER_WINDOW) -> None:
         window_start = int(time.time() // self.window_seconds)
         redis_key = f"ratelimit:{key_id}:{window_start}"
-        try:
-            count = await self._script(keys=[redis_key], args=[self.window_seconds * 1000])
-        except redis.exceptions.RedisError:
-            # Fail closed: the limiter backend being unreachable is treated as a hard
-            # failure (surfaces as a 500 via the global handler), not as "no limit
-            # applied" -- deliberate choice, not an accidental unhandled exception.
-            logger.exception("rate_limit_backend_unavailable", key_id=key_id)
-            raise
+        count = await self._script(keys=[redis_key], args=[self.window_seconds * 1000])
         if int(count) > limit_per_window:
-            logger.warning("rate_limit_exceeded", key_id=key_id, count=int(count), limit=limit_per_window)
             raise RateLimitError("Too many requests")

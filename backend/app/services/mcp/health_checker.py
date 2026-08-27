@@ -1,13 +1,9 @@
 from datetime import datetime, timezone
 
-from app.core.exceptions import ProviderError
-from app.core.logging import get_logger
 from app.db.models.enums import McpHealthStatus, McpServerStatus
 from app.db.models.mcp_server import McpServer
 from app.repositories.mcp_server_repo import McpServerRepo
 from app.services.mcp.mcp_client import McpClient, McpRpcResult
-
-logger = get_logger(__name__)
 
 
 class HealthChecker:
@@ -31,16 +27,8 @@ class HealthChecker:
             result = await self.client.initialize(server)
             server.health_status = McpHealthStatus.healthy
             return result
-        except ProviderError as exc:
-            # mcp_client already logs the underlying httpx failure at ERROR; this is
-            # the routine "server is down" outcome the probe exists to detect.
+        except Exception:
             server.health_status = McpHealthStatus.unhealthy
-            logger.warning(
-                "mcp_server_unhealthy",
-                server_id=str(server.id),
-                server_name=server.name,
-                error=str(exc),
-            )
             return None
         finally:
             server.last_heartbeat = datetime.now(timezone.utc)

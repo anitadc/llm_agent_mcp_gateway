@@ -11,16 +11,17 @@ from app.db.models.user import User
 from app.repositories.provider_config_repo import ProviderConfigRepo
 from app.schemas.provider_config import ProviderConfigCreate, ProviderConfigOut, ProviderConfigUpdate
 
-logger = get_logger(__name__)
-
 router = APIRouter(prefix="/v1/provider-configs", tags=["provider_configs"])
+logger = get_logger(__name__)
 
 
 @router.get("", response_model=list[ProviderConfigOut])
 async def list_provider_configs(
     user: User = Depends(require_roles(UserRole.admin)), repo: ProviderConfigRepo = Depends(get_provider_config_repo)
 ) -> list[ProviderConfigOut]:
-    return [ProviderConfigOut.model_validate(p) for p in await repo.list()]
+    configs = await repo.list()
+    logger.info("listing provider configs", user_id=user.id, count=len(configs))
+    return [ProviderConfigOut.model_validate(p) for p in configs]
 
 
 @router.post("", response_model=ProviderConfigOut, status_code=201)
@@ -29,12 +30,12 @@ async def create_provider_config(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: ProviderConfigRepo = Depends(get_provider_config_repo),
 ) -> ProviderConfigOut:
+    logger.info("creating provider config", user_id=user.id, provider=body.provider, enabled=body.enabled)
     config = await repo.add(
         ProviderConfig(
             provider=body.provider, display_name=body.display_name, credential_ref=body.credential_ref, enabled=body.enabled
         )
     )
-    logger.info("provider_config_created", provider_config_id=str(config.id), provider=config.provider, enabled=config.enabled)
     return ProviderConfigOut.model_validate(config)
 
 
@@ -45,6 +46,7 @@ async def update_provider_config(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: ProviderConfigRepo = Depends(get_provider_config_repo),
 ) -> ProviderConfigOut:
+    logger.info("updating provider config", user_id=user.id, provider_config_id=str(provider_config_id), fields=list(body.model_dump(exclude_none=True).keys()))
     config = await repo.get(provider_config_id)
     if config is None:
         raise NotFoundError("Provider config not found")
@@ -56,5 +58,4 @@ async def update_provider_config(
         config.enabled = body.enabled
     await repo.db.flush()
     await repo.db.refresh(config)
-    logger.info("provider_config_updated", provider_config_id=str(provider_config_id), enabled=config.enabled)
     return ProviderConfigOut.model_validate(config)

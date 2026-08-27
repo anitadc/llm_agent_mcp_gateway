@@ -19,7 +19,6 @@ from app.db.models.project_user import ProjectUser
 from app.db.models.provider_config import ProviderConfig
 from app.db.models.request_log import RequestLog
 from app.db.models.routing_rule import RoutingRule
-from app.db.models.secret import Secret
 from app.db.models.secret_audit_log import SecretAuditLog
 from app.db.models.tenant_identity_config import TenantIdentityConfig
 from app.db.models.user import User
@@ -46,7 +45,6 @@ __all__ = [
     "ProviderConfig",
     "RequestLog",
     "RoutingRule",
-    "Secret",
     "SecretAuditLog",
     "TenantIdentityConfig",
     "User",

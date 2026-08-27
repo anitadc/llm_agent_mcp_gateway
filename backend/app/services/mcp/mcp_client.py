@@ -8,10 +8,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from app.core.config import Settings
 from app.core.exceptions import ProviderError
-from app.core.logging import get_logger
 from app.db.models.mcp_server import McpServer
-
-logger = get_logger(__name__)
 
 MCP_SESSION_HEADER = "Mcp-Session-Id"
 
@@ -35,12 +32,6 @@ def _resolve_auth_headers(server: McpServer) -> dict[str, str]:
     credential_ref = config.get("credential_ref")
     token = os.environ.get(credential_ref) if credential_ref else None
     if not token:
-        if credential_ref:
-            logger.warning(
-                "mcp_server_credential_missing",
-                server_name=server.name,
-                credential_ref=credential_ref,
-            )
         return {}
     if auth_type == "bearer":
         return {"Authorization": f"Bearer {token}"}
@@ -79,9 +70,6 @@ class McpClient:
         retry=retry_if_exception_type(httpx.TransportError),
         stop=stop_after_attempt(2),
         wait=wait_exponential(multiplier=0.2, max=2),
-        # without this, an exhausted retry raises tenacity.RetryError instead of the
-        # underlying httpx exception, which callers' `except httpx.HTTPError` would miss.
-        reraise=True,
     )
     async def _post_idempotent(self, server: McpServer, body: dict[str, Any], session_id: str | None) -> McpRpcResult:
         return await self._post_raw(server, body, session_id)
@@ -99,24 +87,14 @@ class McpClient:
         }
         try:
             return await self._post_idempotent(server, body, session_id=None)
-        except httpx.HTTPError as exc:
-            logger.exception(
-                "mcp_server_initialize_failed",
-                server_name=server.name,
-                server_url=server.base_url,
-            )
+        except Exception as exc:
             raise ProviderError(f"MCP server '{server.name}' initialize failed: {exc}") from exc
 
     async def list_tools(self, server: McpServer, session_id: str | None) -> list[dict[str, Any]]:
         body = {"jsonrpc": "2.0", "id": str(uuid.uuid4()), "method": "tools/list", "params": {}}
         try:
             result = await self._post_idempotent(server, body, session_id)
-        except httpx.HTTPError as exc:
-            logger.exception(
-                "mcp_server_tools_list_failed",
-                server_name=server.name,
-                server_url=server.base_url,
-            )
+        except Exception as exc:
             raise ProviderError(f"MCP server '{server.name}' tools/list failed: {exc}") from exc
         if "error" in result.payload:
             raise ProviderError(f"MCP server '{server.name}' tools/list error: {result.payload['error']}")
@@ -141,11 +119,5 @@ class McpClient:
         }
         try:
             return await self._post_raw(server, body, session_id)
-        except httpx.HTTPError as exc:
-            logger.exception(
-                "mcp_server_tools_call_failed",
-                server_name=server.name,
-                server_url=server.base_url,
-                tool_name=name,
-            )
+        except Exception as exc:
             raise ProviderError(f"MCP server '{server.name}' tools/call failed: {exc}") from exc

@@ -10,6 +10,7 @@ from app.api.deps import (
     require_roles,
 )
 from app.core.exceptions import NotFoundError
+from app.core.logging import get_logger
 from app.db.models.enums import UserRole
 from app.db.models.user import User
 from app.repositories.agent_approval_task_repo import AgentApprovalTaskRepo
@@ -19,13 +20,16 @@ from app.services.agent_gateway.agent_registry_service import AgentRegistryServi
 from app.services.agent_gateway.approval_service import ApprovalService
 
 router = APIRouter(prefix="/v1/agents", tags=["agent_gateway"])
+logger = get_logger(__name__)
 
 
 @router.get("", response_model=list[AgentOut])
 async def list_agents(
     user: User = Depends(require_roles(UserRole.admin)), repo: AgentRepo = Depends(get_agent_repo)
 ) -> list[AgentOut]:
-    return [AgentOut.from_model(a) for a in await repo.list()]
+    agents = await repo.list()
+    logger.info("listing agents", user_id=user.id, count=len(agents))
+    return [AgentOut.from_model(a) for a in agents]
 
 
 @router.post("", response_model=AgentOut, status_code=201)
@@ -34,6 +38,7 @@ async def register_agent(
     user: User = Depends(require_roles(UserRole.admin)),
     registry: AgentRegistryService = Depends(get_agent_registry_service),
 ) -> AgentOut:
+    logger.info("registering agent", user_id=user.id, agent_key=body.agent_key, name=body.name)
     agent = await registry.register(submitted_by=user.id, **body.model_dump())
     return AgentOut.from_model(agent)
 
@@ -44,6 +49,7 @@ async def get_agent(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: AgentRepo = Depends(get_agent_repo),
 ) -> AgentOut:
+    logger.info("fetching agent", user_id=user.id, agent_id=str(agent_id))
     agent = await repo.get(agent_id)
     if agent is None:
         raise NotFoundError("Agent not found")
@@ -58,6 +64,7 @@ async def update_agent(
     repo: AgentRepo = Depends(get_agent_repo),
     registry: AgentRegistryService = Depends(get_agent_registry_service),
 ) -> AgentOut:
+    logger.info("updating agent", user_id=user.id, agent_id=str(agent_id), fields=list(body.model_dump(exclude_none=True)))
     agent = await repo.get(agent_id)
     if agent is None:
         raise NotFoundError("Agent not found")
@@ -71,6 +78,7 @@ async def get_agent_card(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: AgentRepo = Depends(get_agent_repo),
 ) -> dict:
+    logger.info("fetching agent card", user_id=user.id, agent_id=str(agent_id))
     agent = await repo.get(agent_id)
     if agent is None:
         raise NotFoundError("Agent not found")
@@ -85,6 +93,7 @@ async def submit_agent_for_approval(
     task_repo: AgentApprovalTaskRepo = Depends(get_agent_approval_task_repo),
     approval: ApprovalService = Depends(get_approval_service),
 ) -> list[AgentApprovalTaskOut]:
+    logger.info("submitting agent for approval", user_id=user.id, agent_id=str(agent_id))
     agent = await agent_repo.get(agent_id)
     if agent is None:
         raise NotFoundError("Agent not found")
@@ -99,7 +108,9 @@ async def list_agent_approvals(
     user: User = Depends(require_roles(UserRole.admin)),
     task_repo: AgentApprovalTaskRepo = Depends(get_agent_approval_task_repo),
 ) -> list[AgentApprovalTaskOut]:
-    return [AgentApprovalTaskOut.from_model(t) for t in await task_repo.list_by_agent(agent_id)]
+    tasks = await task_repo.list_by_agent(agent_id)
+    logger.info("listing agent approvals", user_id=user.id, agent_id=str(agent_id), count=len(tasks))
+    return [AgentApprovalTaskOut.from_model(t) for t in tasks]
 
 
 @router.post("/{agent_id}/publish", response_model=AgentOut)
@@ -109,6 +120,7 @@ async def publish_agent(
     repo: AgentRepo = Depends(get_agent_repo),
     registry: AgentRegistryService = Depends(get_agent_registry_service),
 ) -> AgentOut:
+    logger.info("publishing agent", user_id=user.id, agent_id=str(agent_id))
     agent = await repo.get(agent_id)
     if agent is None:
         raise NotFoundError("Agent not found")
@@ -123,6 +135,7 @@ async def suspend_agent(
     repo: AgentRepo = Depends(get_agent_repo),
     registry: AgentRegistryService = Depends(get_agent_registry_service),
 ) -> AgentOut:
+    logger.info("suspending agent", user_id=user.id, agent_id=str(agent_id))
     agent = await repo.get(agent_id)
     if agent is None:
         raise NotFoundError("Agent not found")
@@ -137,6 +150,7 @@ async def reactivate_agent(
     repo: AgentRepo = Depends(get_agent_repo),
     registry: AgentRegistryService = Depends(get_agent_registry_service),
 ) -> AgentOut:
+    logger.info("reactivating agent", user_id=user.id, agent_id=str(agent_id))
     agent = await repo.get(agent_id)
     if agent is None:
         raise NotFoundError("Agent not found")
@@ -151,6 +165,7 @@ async def deprecate_agent(
     repo: AgentRepo = Depends(get_agent_repo),
     registry: AgentRegistryService = Depends(get_agent_registry_service),
 ) -> AgentOut:
+    logger.info("deprecating agent", user_id=user.id, agent_id=str(agent_id))
     agent = await repo.get(agent_id)
     if agent is None:
         raise NotFoundError("Agent not found")
@@ -165,6 +180,7 @@ async def retire_agent(
     repo: AgentRepo = Depends(get_agent_repo),
     registry: AgentRegistryService = Depends(get_agent_registry_service),
 ) -> AgentOut:
+    logger.info("retiring agent", user_id=user.id, agent_id=str(agent_id))
     agent = await repo.get(agent_id)
     if agent is None:
         raise NotFoundError("Agent not found")
@@ -180,7 +196,9 @@ async def list_pending_approvals(
     user: User = Depends(require_roles(UserRole.admin)),
     task_repo: AgentApprovalTaskRepo = Depends(get_agent_approval_task_repo),
 ) -> list[AgentApprovalTaskOut]:
-    return [AgentApprovalTaskOut.from_model(t) for t in await task_repo.list_pending()]
+    tasks = await task_repo.list_pending()
+    logger.info("listing pending approvals", user_id=user.id, count=len(tasks))
+    return [AgentApprovalTaskOut.from_model(t) for t in tasks]
 
 
 @approvals_router.post("/{task_id}/approve", response_model=AgentApprovalTaskOut)
@@ -191,6 +209,7 @@ async def approve_task(
     task_repo: AgentApprovalTaskRepo = Depends(get_agent_approval_task_repo),
     approval: ApprovalService = Depends(get_approval_service),
 ) -> AgentApprovalTaskOut:
+    logger.info("approving agent task", user_id=user.id, task_id=str(task_id), approved=True)
     task = await task_repo.get(task_id)
     if task is None:
         raise NotFoundError("Approval task not found")
@@ -206,6 +225,7 @@ async def reject_task(
     task_repo: AgentApprovalTaskRepo = Depends(get_agent_approval_task_repo),
     approval: ApprovalService = Depends(get_approval_service),
 ) -> AgentApprovalTaskOut:
+    logger.info("rejecting agent task", user_id=user.id, task_id=str(task_id), approved=False)
     task = await task_repo.get(task_id)
     if task is None:
         raise NotFoundError("Approval task not found")

@@ -2,16 +2,15 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_discovery_service, get_mcp_tool_repo, require_mcp_scope, require_roles
 from app.core.logging import get_logger
-from app.db.models.enums import McpSyncStatus, UserRole
+from app.db.models.enums import UserRole
 from app.db.models.user import User
 from app.middleware.auth_middleware import Principal
 from app.repositories.mcp_tool_repo import McpToolRepo
 from app.schemas.mcp import McpServerOut, McpToolOut
 from app.services.mcp.discovery_service import DiscoveryService
 
-logger = get_logger(__name__)
-
 router = APIRouter(prefix="/mcp/tools", tags=["mcp_tools"])
+logger = get_logger(__name__)
 
 
 @router.get("", response_model=list[McpToolOut])
@@ -29,7 +28,9 @@ async def list_tools(
     when it calls this endpoint. Pass include_unavailable=true (the Tools Explorer
     UI does, for admins) to also see tools hidden by a disabled or unhealthy server.
     """
-    return [McpToolOut.from_model(t) for t in await repo.search(q, only_available=not include_unavailable)]
+    tools = await repo.search(q, only_available=not include_unavailable)
+    logger.info("listing MCP tools", principal_kind=principal.kind, query=q, include_unavailable=include_unavailable, count=len(tools))
+    return [McpToolOut.from_model(t) for t in tools]
 
 
 @router.post("/sync", response_model=list[McpServerOut])
@@ -39,12 +40,6 @@ async def sync_tools(
 ) -> list[McpServerOut]:
     """Manual sync: re-runs initialize + tools/list against every enabled MCP
     server and reconciles the registry (adds new tools, drops removed ones)."""
+    logger.info("syncing MCP tools", user_id=user.id)
     servers = await discovery.sync_all()
-    failed = [s.name for s in servers if s.last_sync_status != McpSyncStatus.success]
-    logger.info(
-        "mcp_tools_sync_triggered",
-        user_id=str(user.id),
-        server_count=len(servers),
-        failed_servers=failed,
-    )
     return [McpServerOut.from_model(s) for s in servers]

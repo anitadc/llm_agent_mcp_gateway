@@ -1,13 +1,10 @@
 from typing import Any
 
 from app.core.exceptions import BadRequestError
-from app.core.logging import get_logger
 from app.db.models.agent import Agent
 from app.db.models.enums import AgentLifecycleStatus
 from app.repositories.agent_repo import AgentRepo
 from app.services.agent_gateway import lifecycle
-
-logger = get_logger(__name__)
 
 
 def validate_agent_card(agent: Agent) -> list[str]:
@@ -40,9 +37,7 @@ class AgentRegistryService:
     async def register(self, **fields: Any) -> Agent:
         if await self.agent_repo.get_by_key(fields["agent_key"]) is not None:
             raise BadRequestError(f"Agent key '{fields['agent_key']}' is already registered")
-        agent = await self.agent_repo.add(Agent(status=AgentLifecycleStatus.draft, **fields))
-        logger.info("agent_registered", agent_key=agent.agent_key, agent_id=str(agent.id))
-        return agent
+        return await self.agent_repo.add(Agent(status=AgentLifecycleStatus.draft, **fields))
 
     async def update(self, agent: Agent, **fields: Any) -> Agent:
         if agent.status not in (AgentLifecycleStatus.draft, AgentLifecycleStatus.rejected):
@@ -58,12 +53,10 @@ class AgentRegistryService:
         lifecycle.require_transition(agent.status, AgentLifecycleStatus.active)
         problems = validate_agent_card(agent)
         if problems:
-            logger.warning("agent_publish_rejected", agent_key=agent.agent_key, problems=problems)
             raise BadRequestError(f"Cannot publish '{agent.agent_key}': {'; '.join(problems)}")
         agent.status = AgentLifecycleStatus.active
         await self.agent_repo.db.flush()
         await self.agent_repo.db.refresh(agent)
-        logger.info("agent_published", agent_key=agent.agent_key)
         return agent
 
     async def suspend(self, agent: Agent) -> Agent:
@@ -71,7 +64,6 @@ class AgentRegistryService:
         agent.status = AgentLifecycleStatus.suspended
         await self.agent_repo.db.flush()
         await self.agent_repo.db.refresh(agent)
-        logger.info("agent_suspended", agent_key=agent.agent_key)
         return agent
 
     async def reactivate(self, agent: Agent) -> Agent:
@@ -79,7 +71,6 @@ class AgentRegistryService:
         agent.status = AgentLifecycleStatus.active
         await self.agent_repo.db.flush()
         await self.agent_repo.db.refresh(agent)
-        logger.info("agent_reactivated", agent_key=agent.agent_key)
         return agent
 
     async def deprecate(self, agent: Agent) -> Agent:
@@ -87,7 +78,6 @@ class AgentRegistryService:
         agent.status = AgentLifecycleStatus.deprecated
         await self.agent_repo.db.flush()
         await self.agent_repo.db.refresh(agent)
-        logger.info("agent_deprecated", agent_key=agent.agent_key)
         return agent
 
     async def retire(self, agent: Agent) -> Agent:
@@ -95,7 +85,6 @@ class AgentRegistryService:
         agent.status = AgentLifecycleStatus.retired
         await self.agent_repo.db.flush()
         await self.agent_repo.db.refresh(agent)
-        logger.info("agent_retired", agent_key=agent.agent_key)
         return agent
 
     @staticmethod

@@ -13,16 +13,17 @@ from app.repositories.mcp_server_repo import McpServerRepo
 from app.schemas.mcp import McpServerCreate, McpServerOut, McpServerStatsOut, McpServerUpdate
 from app.services.mcp.health_checker import HealthChecker
 
-logger = get_logger(__name__)
-
 router = APIRouter(prefix="/mcp/servers", tags=["mcp_servers"])
+logger = get_logger(__name__)
 
 
 @router.get("", response_model=list[McpServerOut])
 async def list_mcp_servers(
     user: User = Depends(require_roles(UserRole.admin)), repo: McpServerRepo = Depends(get_mcp_server_repo)
 ) -> list[McpServerOut]:
-    return [McpServerOut.from_model(server, tool_count) for server, tool_count in await repo.list_with_tool_counts()]
+    servers = await repo.list_with_tool_counts()
+    logger.info("listing MCP servers", user_id=user.id, count=len(servers))
+    return [McpServerOut.from_model(server, tool_count) for server, tool_count in servers]
 
 
 @router.post("", response_model=McpServerOut, status_code=201)
@@ -31,6 +32,7 @@ async def create_mcp_server(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: McpServerRepo = Depends(get_mcp_server_repo),
 ) -> McpServerOut:
+    logger.info("creating MCP server", user_id=user.id, name=body.name, base_url=body.base_url)
     server = await repo.add(
         McpServer(
             name=body.name,
@@ -42,13 +44,6 @@ async def create_mcp_server(
             extra_metadata=body.metadata,
         )
     )
-    logger.info(
-        "mcp_server_created",
-        server_id=str(server.id),
-        server_name=server.name,
-        base_url=server.base_url,
-        user_id=str(user.id),
-    )
     return McpServerOut.from_model(server)
 
 
@@ -59,6 +54,7 @@ async def update_mcp_server(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: McpServerRepo = Depends(get_mcp_server_repo),
 ) -> McpServerOut:
+    logger.info("updating MCP server", user_id=user.id, server_id=str(server_id), fields=list(body.model_dump(exclude_none=True).keys()))
     server = await repo.get(server_id)
     if server is None:
         raise NotFoundError("MCP server not found")
@@ -74,12 +70,6 @@ async def update_mcp_server(
         server.extra_metadata = body.metadata
     await repo.db.flush()
     await repo.db.refresh(server)
-    logger.info(
-        "mcp_server_updated",
-        server_id=str(server.id),
-        server_name=server.name,
-        user_id=str(user.id),
-    )
     return McpServerOut.from_model(server)
 
 
@@ -89,10 +79,10 @@ async def delete_mcp_server(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: McpServerRepo = Depends(get_mcp_server_repo),
 ) -> None:
+    logger.info("deleting MCP server", user_id=user.id, server_id=str(server_id))
     server = await repo.get(server_id)
     if server is None:
         raise NotFoundError("MCP server not found")
-    logger.info("mcp_server_deleted", server_id=str(server.id), server_name=server.name, user_id=str(user.id))
     await repo.delete(server)
 
 
@@ -103,17 +93,11 @@ async def trigger_health_check(
     repo: McpServerRepo = Depends(get_mcp_server_repo),
     health_checker: HealthChecker = Depends(get_health_checker),
 ) -> McpServerOut:
+    logger.info("checking MCP server health", user_id=user.id, server_id=str(server_id))
     server = await repo.get(server_id)
     if server is None:
         raise NotFoundError("MCP server not found")
     await health_checker.probe(server)
-    logger.info(
-        "mcp_server_health_check_triggered",
-        server_id=str(server.id),
-        server_name=server.name,
-        health_status=str(server.health_status),
-        user_id=str(user.id),
-    )
     return McpServerOut.from_model(server)
 
 
@@ -125,6 +109,7 @@ async def get_mcp_server_stats(
     server_repo: McpServerRepo = Depends(get_mcp_server_repo),
     log_repo: McpRequestLogRepo = Depends(get_mcp_request_log_repo),
 ) -> McpServerStatsOut:
+    logger.info("loading MCP server stats", user_id=user.id, server_id=str(server_id), window_minutes=window_minutes)
     server = await server_repo.get(server_id)
     if server is None:
         raise NotFoundError("MCP server not found")

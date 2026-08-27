@@ -18,9 +18,7 @@ structlog==24.4.0
 # Secret providers (app/secrets/) -- each provider's SDK is imported lazily inside
 # its own module, so a deployment only pays for the one it actually uses at
 # runtime; all five are still installed so every provider is testable/importable.
-# cryptography backs PostgresSecretProvider's at-rest encryption (Fernet); the
-# others are external-service SDKs.
-cryptography==43.0.3
+infisicalsdk==1.0.7
 boto3==1.35.68
 google-cloud-secret-manager==2.21.1
 azure-keyvault-secrets==4.9.0

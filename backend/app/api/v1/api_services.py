@@ -20,16 +20,17 @@ from app.schemas.api_service import (
 )
 from app.services.api_registry.api_registry_service import ApiRegistryService
 
-logger = get_logger(__name__)
-
 router = APIRouter(prefix="/mcp/api-services", tags=["api_registry"])
+logger = get_logger(__name__)
 
 
 @router.get("", response_model=list[ApiServiceOut])
 async def list_api_services(
     user: User = Depends(require_roles(UserRole.admin)), repo: ApiServiceRepo = Depends(get_api_service_repo)
 ) -> list[ApiServiceOut]:
-    return [ApiServiceOut.from_model(service, count) for service, count in await repo.list_with_endpoint_counts()]
+    services = await repo.list_with_endpoint_counts()
+    logger.info("listing API services", user_id=user.id, count=len(services))
+    return [ApiServiceOut.from_model(service, count) for service, count in services]
 
 
 @router.post("", response_model=ApiServiceOut, status_code=201)
@@ -38,6 +39,7 @@ async def create_api_service(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: ApiServiceRepo = Depends(get_api_service_repo),
 ) -> ApiServiceOut:
+    logger.info("creating API service", user_id=user.id, name=body.name, base_url=body.base_url)
     service = await repo.add(
         ApiService(
             name=body.name,
@@ -53,7 +55,6 @@ async def create_api_service(
             extra_metadata=body.metadata,
         )
     )
-    logger.info("api_service_created", api_service_id=str(service.id), name=service.name)
     return ApiServiceOut.from_model(service)
 
 
@@ -64,6 +65,7 @@ async def update_api_service(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: ApiServiceRepo = Depends(get_api_service_repo),
 ) -> ApiServiceOut:
+    logger.info("updating API service", user_id=user.id, service_id=str(service_id), fields=list(body.model_dump(exclude_none=True)))
     service = await repo.get(service_id)
     if service is None:
         raise NotFoundError("API service not found")
@@ -89,7 +91,6 @@ async def update_api_service(
         service.extra_metadata = body.metadata
     await repo.db.flush()
     await repo.db.refresh(service)
-    logger.info("api_service_updated", api_service_id=str(service_id))
     return ApiServiceOut.from_model(service)
 
 
@@ -99,13 +100,13 @@ async def delete_api_service(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: ApiServiceRepo = Depends(get_api_service_repo),
 ) -> None:
+    logger.info("deleting API service", user_id=user.id, service_id=str(service_id))
     service = await repo.get(service_id)
     if service is None:
         raise NotFoundError("API service not found")
     # Cascades to api_endpoints, and from there to each endpoint's paired McpTool
     # row, via the FKs' ondelete=CASCADE -- same pattern as deleting an McpServer.
     await repo.delete(service)
-    logger.info("api_service_deleted", api_service_id=str(service_id))
 
 
 @router.get("/{service_id}/endpoints", response_model=list[ApiEndpointOut])
@@ -114,7 +115,9 @@ async def list_api_endpoints(
     user: User = Depends(require_roles(UserRole.admin)),
     endpoint_repo: ApiEndpointRepo = Depends(get_api_endpoint_repo),
 ) -> list[ApiEndpointOut]:
-    return [ApiEndpointOut.from_model(e) for e in await endpoint_repo.list_by_service(service_id)]
+    endpoints = await endpoint_repo.list_by_service(service_id)
+    logger.info("listing API endpoints", user_id=user.id, service_id=str(service_id), count=len(endpoints))
+    return [ApiEndpointOut.from_model(e) for e in endpoints]
 
 
 @router.post("/{service_id}/endpoints", response_model=ApiEndpointOut, status_code=201)
@@ -125,6 +128,7 @@ async def register_api_endpoint(
     service_repo: ApiServiceRepo = Depends(get_api_service_repo),
     registry: ApiRegistryService = Depends(get_api_registry_service),
 ) -> ApiEndpointOut:
+    logger.info("registering API endpoint", user_id=user.id, service_id=str(service_id), tool_name=body.tool_name, path=body.path)
     """The "REST endpoint automatically becomes an MCP Tool" step: registering an
     endpoint here immediately creates its paired, callable McpTool row -- no
     separate discovery/sync step, unlike MCP servers."""
@@ -151,6 +155,7 @@ async def update_api_endpoint(
     endpoint_repo: ApiEndpointRepo = Depends(get_api_endpoint_repo),
     registry: ApiRegistryService = Depends(get_api_registry_service),
 ) -> ApiEndpointOut:
+    logger.info("updating API endpoint", user_id=user.id, service_id=str(service_id), endpoint_id=str(endpoint_id), fields=list((body.model_dump(exclude_none=True) or {}).keys()))
     endpoint = await endpoint_repo.get(endpoint_id)
     if endpoint is None or endpoint.api_service_id != service_id:
         raise NotFoundError("API endpoint not found")
@@ -176,6 +181,7 @@ async def delete_api_endpoint(
     endpoint_repo: ApiEndpointRepo = Depends(get_api_endpoint_repo),
     registry: ApiRegistryService = Depends(get_api_registry_service),
 ) -> None:
+    logger.info("deleting API endpoint", user_id=user.id, service_id=str(service_id), endpoint_id=str(endpoint_id))
     endpoint = await endpoint_repo.get(endpoint_id)
     if endpoint is None or endpoint.api_service_id != service_id:
         raise NotFoundError("API endpoint not found")

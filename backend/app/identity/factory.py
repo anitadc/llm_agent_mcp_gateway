@@ -3,10 +3,7 @@ from typing import Any
 import jwt
 
 from app.core.config import Settings, get_settings
-from app.core.logging import get_logger
 from app.identity.base import IdentityProvider
-
-logger = get_logger(__name__)
 
 PROVIDER_NAMES = ["keycloak", "entra", "auth0", "okta", "aws_identity", "google"]
 
@@ -39,7 +36,6 @@ def _build_provider(name: str, settings: Settings) -> IdentityProvider:
         from app.identity.google_identity_provider import GoogleIdentityProvider
 
         return GoogleIdentityProvider(settings)
-    logger.error("unknown_identity_provider", provider=name)
     raise ValueError(f"Unknown IDENTITY_PROVIDER '{name}'")
 
 
@@ -71,8 +67,7 @@ def peek_unverified_issuer(token: str) -> str | None:
     try:
         claims = jwt.decode(token, options={"verify_signature": False, "verify_aud": False, "verify_exp": False})
         return claims.get("iss")
-    except jwt.PyJWTError as exc:
-        logger.warning("issuer_peek_failed", reason=str(exc))
+    except jwt.PyJWTError:
         return None
 
 

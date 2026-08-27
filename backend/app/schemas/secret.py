@@ -13,7 +13,7 @@ class SecretProviderInfo(BaseModel):
 
 
 class SecretProviderConfigOut(BaseModel):
-    active_provider: str
+    active_provider: str | None
     providers: list[SecretProviderInfo]
 
 
@@ -24,18 +24,6 @@ class SecretStatusOut(BaseModel):
     status: Literal["configured", "not_configured", "error"]
 
 
-class SecretSetRequest(BaseModel):
-    secret_name: str
-    value: str
-    tenant: str | None = None
-
-
-class SecretSetResponse(BaseModel):
-    secret_name: str
-    provider: str
-    status: Literal["set", "error"]
-
-
 class SecretRotateRequest(BaseModel):
     secret_name: str
     tenant: str | None = None
@@ -43,7 +31,7 @@ class SecretRotateRequest(BaseModel):
 
 class SecretRotateResponse(BaseModel):
     secret_name: str
-    provider: str
+    provider: str | None
     status: Literal["rotated", "error"]
 
 

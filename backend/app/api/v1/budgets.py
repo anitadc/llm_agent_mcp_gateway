@@ -13,9 +13,8 @@ from app.repositories.budget_repo import BudgetRepo
 from app.repositories.cost_ledger_repo import CostLedgerRepo
 from app.schemas.budget import BudgetCreate, BudgetOut, BudgetUpdate
 
-logger = get_logger(__name__)
-
 router = APIRouter(prefix="/v1/budgets", tags=["budgets"])
+logger = get_logger(__name__)
 
 
 def _period_start(period: BudgetPeriod) -> datetime:
@@ -56,6 +55,7 @@ async def list_budgets(
     cost_ledger_repo: CostLedgerRepo = Depends(get_cost_ledger_repo),
 ) -> list[BudgetOut]:
     budgets = await repo.list_visible(organization_id, project_id)
+    logger.info("listing budgets", user_id=user.id, organization_id=str(organization_id) if organization_id else None, project_id=str(project_id) if project_id else None, count=len(budgets))
     return [await _to_out(b, cost_ledger_repo) for b in budgets]
 
 
@@ -66,6 +66,7 @@ async def create_budget(
     repo: BudgetRepo = Depends(get_budget_repo),
     cost_ledger_repo: CostLedgerRepo = Depends(get_cost_ledger_repo),
 ) -> BudgetOut:
+    logger.info("creating budget", user_id=user.id, organization_id=str(body.organization_id), project_id=str(body.project_id) if body.project_id else None, period=body.period.value, limit_usd=float(body.limit_usd))
     budget = await repo.add(
         Budget(
             organization_id=body.organization_id,
@@ -76,7 +77,6 @@ async def create_budget(
             alert_threshold_pct=body.alert_threshold_pct,
         )
     )
-    logger.info("budget_created", budget_id=str(budget.id), period=budget.period.value)
     return await _to_out(budget, cost_ledger_repo)
 
 
@@ -88,6 +88,7 @@ async def update_budget(
     repo: BudgetRepo = Depends(get_budget_repo),
     cost_ledger_repo: CostLedgerRepo = Depends(get_cost_ledger_repo),
 ) -> BudgetOut:
+    logger.info("updating budget", user_id=user.id, budget_id=str(budget_id), fields=list(body.model_dump(exclude_none=True).keys()))
     budget = await repo.get(budget_id)
     if budget is None:
         raise NotFoundError("Budget not found")
@@ -99,7 +100,6 @@ async def update_budget(
         budget.alert_threshold_pct = body.alert_threshold_pct
     await repo.db.flush()
     await repo.db.refresh(budget)
-    logger.info("budget_updated", budget_id=str(budget_id))
     return await _to_out(budget, cost_ledger_repo)
 
 
@@ -109,8 +109,8 @@ async def delete_budget(
     user: User = Depends(require_roles(UserRole.admin, UserRole.team_lead)),
     repo: BudgetRepo = Depends(get_budget_repo),
 ) -> None:
+    logger.info("deleting budget", user_id=user.id, budget_id=str(budget_id))
     budget = await repo.get(budget_id)
     if budget is None:
         raise NotFoundError("Budget not found")
     await repo.delete(budget)
-    logger.info("budget_deleted", budget_id=str(budget_id))

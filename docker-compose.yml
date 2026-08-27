@@ -58,11 +58,32 @@ services:
     ports:
       - "${GUARDRAILS_HOST_PORT:-9100}:9000"
 
+  infisical:
+    image: infisical/infisical:latest
+    container_name: wn_infisical
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    environment:
+      SITE_URL: http://localhost:${INFISICAL_HOST_PORT:-8081}
+      NODE_ENV: production
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-encryption-key-change-me}
+      AUTH_SECRET: ${AUTH_SECRET:-dev-auth-secret-change-me}
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me}
+      REDIS_URL: redis://valkey:6379/0
+      DB_CONNECTION_URI: postgresql+asyncpg://gateway:gateway@postgres:5432/gateway
+    ports:
+      - "${INFISICAL_HOST_PORT:-8081}:8080"
+
   gateway-backend:
     build: ./backend
     container_name: wn_gateway_backend
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level ${LOG_LEVEL:-debug}"
     environment:
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
       DATABASE_URL: postgresql+asyncpg://gateway:gateway@postgres:5432/gateway
       VALKEY_URL: redis://valkey:6379/0
       # Must match the host the BROWSER uses to reach Keycloak (localhost:8180,
@@ -99,12 +120,13 @@ services:
       # Secret Provider layer (app/secrets/) -- provider credentials themselves
       # (OPENAI_API_KEY, ANTHROPIC_API_KEY, ...) are never set here; they live in
       # whichever backend SECRET_PROVIDER points at. See docs/secret-management.md.
-      # Default "postgres" stores them (Fernet-encrypted) in this same Postgres
-      # instance -- zero extra services for local dev. Change the encryption key
-      # for anything beyond local dev; this default is a placeholder, not a secret
-      # worth keeping past first run.
-      SECRET_PROVIDER: ${SECRET_PROVIDER:-postgres}
-      SECRET_STORAGE_ENCRYPTION_KEY: ${SECRET_STORAGE_ENCRYPTION_KEY:-ZkcyJKfplZZRbdiUXnsC15rHoufpJvBoThi14IV8tiQ=}
+      # Leave unset to avoid selecting any backend by default.
+      SECRET_PROVIDER: ${SECRET_PROVIDER:-None}
+      INFISICAL_SITE_URL: ${INFISICAL_SITE_URL:-http://infisical:8080}
+      INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID:-}
+      INFISICAL_CLIENT_SECRET: ${INFISICAL_CLIENT_SECRET:-}
+      INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID:-}
+      INFISICAL_ENVIRONMENT: ${INFISICAL_ENVIRONMENT:-dev}
       AWS_SECRETS_REGION: ${AWS_SECRETS_REGION:-}
       AWS_SECRET_NAME_PREFIX: ${AWS_SECRET_NAME_PREFIX:-llm-gateway}
       GCP_PROJECT_ID: ${GCP_PROJECT_ID:-}

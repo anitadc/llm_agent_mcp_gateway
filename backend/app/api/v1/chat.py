@@ -13,7 +13,6 @@ from app.api.deps import (
     get_project_repo,
 )
 from app.core.exceptions import GuardrailBlockedError, NotFoundError
-from app.core.logging import get_logger
 from app.db.models.api_key import ApiKey
 from app.db.models.enums import GuardrailDirection, ModelCapability, RequestStatus
 from app.repositories.project_repo import ProjectRepo
@@ -30,8 +29,6 @@ from app.services.cost_service import CostService
 from app.services.guardrails.base import GuardrailsClient, GuardrailVerdict
 from app.services.logging_service import record_request
 from app.services.routing.router import GatewayRouter
-
-logger = get_logger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["chat"])
 
@@ -50,7 +47,6 @@ async def create_chat_completion(
 ) -> ChatCompletionResponse:
     request_id = request.state.request_id
     start = time.perf_counter()
-    logger.info("chat_completion_requested", request_id=str(request_id), model=body.model)
 
     project = await project_repo.get(api_key.project_id)
     if project is None:
@@ -93,7 +89,6 @@ async def create_chat_completion(
     prompt_verdict = await guardrails.check_prompt(prompt_text, context)
     if not prompt_verdict.allowed:
         log(status=RequestStatus.blocked, guardrail_verdicts=[(GuardrailDirection.prompt, prompt_verdict)])
-        logger.warning("guardrail_blocked", request_id=str(request_id), direction="prompt", model=body.model)
         raise GuardrailBlockedError("Prompt violates policy")
 
     cache_key = CacheService.build_key(
@@ -146,7 +141,6 @@ async def create_chat_completion(
                 (GuardrailDirection.response, response_verdict),
             ],
         )
-        logger.warning("guardrail_blocked", request_id=str(request_id), direction="response", model=body.model)
         raise GuardrailBlockedError("Response violates policy")
 
     cost = await cost_service.calculate(
@@ -189,12 +183,5 @@ async def create_chat_completion(
             (GuardrailDirection.prompt, prompt_verdict),
             (GuardrailDirection.response, response_verdict),
         ],
-    )
-    logger.info(
-        "chat_completion_completed",
-        request_id=str(request_id),
-        resolved_provider=provider_response.resolved_provider,
-        resolved_model=provider_response.resolved_model,
-        cache_hit=False,
     )
     return result

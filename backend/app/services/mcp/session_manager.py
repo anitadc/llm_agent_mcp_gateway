@@ -1,10 +1,7 @@
 import uuid
 
-from app.core.logging import get_logger
 from app.db.models.mcp_session import McpSession
 from app.repositories.mcp_session_repo import McpSessionRepo
-
-logger = get_logger(__name__)
 
 
 class SessionManager:
@@ -31,9 +28,7 @@ class SessionManager:
             api_key_id=api_key_id,
             server_sessions={},
         )
-        created = await self.session_repo.add(session)
-        logger.info("mcp_client_session_created", client_session_id=created.client_session_id)
-        return created, True
+        return await self.session_repo.add(session), True
 
     async def get(self, client_session_id: str) -> McpSession | None:
         return await self.session_repo.get_by_client_session_id(client_session_id)
@@ -51,8 +46,3 @@ class SessionManager:
         # dict object on this plain JSONB column.
         session.server_sessions = {**session.server_sessions, str(server_id): server_session_id}
         await self.session_repo.db.flush()
-        logger.info(
-            "mcp_server_session_recorded",
-            client_session_id=session.client_session_id,
-            server_id=str(server_id),
-        )

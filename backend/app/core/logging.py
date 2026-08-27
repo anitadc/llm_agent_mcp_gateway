@@ -7,13 +7,15 @@ request_id_var = structlog.contextvars.bind_contextvars
 
 
 def configure_logging(log_level: str) -> None:
-    logging.basicConfig(stream=sys.stdout, level=log_level, format="%(message)s")
+    logging.basicConfig(stream=sys.stdout, level=log_level, format="%(message)s", force=True)
 
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso"),
+            # structlog.processors.format_exc_info,
+            # structlog.processors.ExceptionRenderer(),
             structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(log_level)),

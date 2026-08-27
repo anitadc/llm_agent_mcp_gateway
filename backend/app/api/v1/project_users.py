@@ -11,9 +11,8 @@ from app.db.models.user import User
 from app.repositories.project_user_repo import ProjectUserRepo
 from app.schemas.project_user import ProjectUserCreate, ProjectUserOut, ProjectUserUpdate
 
-logger = get_logger(__name__)
-
 router = APIRouter(prefix="/v1/project-users", tags=["project_users"])
+logger = get_logger(__name__)
 
 
 @router.get("", response_model=list[ProjectUserOut])
@@ -23,7 +22,9 @@ async def list_project_users(
     user: User = Depends(get_current_user),
     repo: ProjectUserRepo = Depends(get_project_user_repo),
 ) -> list[ProjectUserOut]:
-    return [ProjectUserOut.model_validate(pu) for pu in await repo.list_memberships(project_id, user_id)]
+    memberships = await repo.list_memberships(project_id, user_id)
+    logger.info("listing project memberships", user_id=user.id, project_id=str(project_id) if project_id else None, target_user_id=str(user_id) if user_id else None, count=len(memberships))
+    return [ProjectUserOut.model_validate(pu) for pu in memberships]
 
 
 @router.post("", response_model=ProjectUserOut, status_code=201)
@@ -32,11 +33,11 @@ async def add_project_user(
     user: User = Depends(require_roles(UserRole.admin, UserRole.team_lead)),
     repo: ProjectUserRepo = Depends(get_project_user_repo),
 ) -> ProjectUserOut:
+    logger.info("adding project membership", user_id=user.id, project_id=str(body.project_id), target_user_id=str(body.user_id))
     kwargs = {"project_id": body.project_id, "user_id": body.user_id}
     if body.start_date is not None:
         kwargs["start_date"] = body.start_date
     membership = await repo.add(ProjectUser(**kwargs))
-    logger.info("project_user_added", project_user_id=str(membership.id), project_id=str(body.project_id))
     return ProjectUserOut.model_validate(membership)
 
 
@@ -47,6 +48,7 @@ async def update_project_user(
     user: User = Depends(require_roles(UserRole.admin, UserRole.team_lead)),
     repo: ProjectUserRepo = Depends(get_project_user_repo),
 ) -> ProjectUserOut:
+    logger.info("updating project membership", user_id=user.id, project_user_id=str(project_user_id), fields=list(body.model_dump(exclude_none=True).keys()))
     membership = await repo.get(project_user_id)
     if membership is None:
         raise NotFoundError("Project membership not found")
@@ -56,5 +58,4 @@ async def update_project_user(
         membership.end_date = body.end_date
     await repo.db.flush()
     await repo.db.refresh(membership)
-    logger.info("project_user_updated", project_user_id=str(project_user_id))
     return ProjectUserOut.model_validate(membership)

@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_cost_ledger_repo, get_current_user, get_db
+from app.core.logging import get_logger
 from app.db.models.cost_ledger import CostLedger
 from app.db.models.request_log import RequestLog
 from app.db.models.user import User
@@ -13,6 +14,7 @@ from app.repositories.cost_ledger_repo import CostLedgerRepo
 from app.schemas.usage import ModelBreakdown, UsageSummary
 
 router = APIRouter(prefix="/v1/usage", tags=["usage"])
+logger = get_logger(__name__)
 
 
 @router.get("/summary", response_model=UsageSummary)
@@ -25,6 +27,14 @@ async def get_usage_summary(
     cost_ledger_repo: CostLedgerRepo = Depends(get_cost_ledger_repo),
     db: AsyncSession = Depends(get_db),
 ) -> UsageSummary:
+    logger.info(
+        "loading usage summary",
+        user_id=user.id,
+        organization_id=str(organization_id) if organization_id else None,
+        project_id=str(project_id) if project_id else None,
+        date_from=date_from.isoformat() if date_from else None,
+        date_to=date_to.isoformat() if date_to else None,
+    )
     resolved_from = date_from or (datetime.now(timezone.utc).date() - timedelta(days=30))
     resolved_to = date_to or datetime.now(timezone.utc).date()
     # resolved_to is a calendar date; comparing a timestamptz column against it directly

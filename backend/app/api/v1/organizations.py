@@ -11,16 +11,17 @@ from app.db.models.user import User
 from app.repositories.organization_repo import OrganizationRepo
 from app.schemas.organization import OrganizationCreate, OrganizationOut, OrganizationUpdate
 
-logger = get_logger(__name__)
-
 router = APIRouter(prefix="/v1/organizations", tags=["organizations"])
+logger = get_logger(__name__)
 
 
 @router.get("", response_model=list[OrganizationOut])
 async def list_organizations(
     user: User = Depends(require_roles(UserRole.admin)), repo: OrganizationRepo = Depends(get_organization_repo)
 ) -> list[OrganizationOut]:
-    return [OrganizationOut.model_validate(o) for o in await repo.list()]
+    orgs = await repo.list()
+    logger.info("listing organizations", user_id=user.id, count=len(orgs))
+    return [OrganizationOut.model_validate(o) for o in orgs]
 
 
 @router.post("", response_model=OrganizationOut, status_code=201)
@@ -29,8 +30,8 @@ async def create_organization(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: OrganizationRepo = Depends(get_organization_repo),
 ) -> OrganizationOut:
+    logger.info("creating organization", user_id=user.id, name=body.name)
     org = await repo.add(Organization(name=body.name))
-    logger.info("organization_created", organization_id=str(org.id))
     return OrganizationOut.model_validate(org)
 
 
@@ -41,11 +42,11 @@ async def update_organization(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: OrganizationRepo = Depends(get_organization_repo),
 ) -> OrganizationOut:
+    logger.info("updating organization", user_id=user.id, organization_id=str(organization_id), fields=list(body.model_dump(exclude_none=True).keys()))
     org = await repo.get(organization_id)
     if org is None:
         raise NotFoundError("Organization not found")
     org.name = body.name
     await repo.db.flush()
     await repo.db.refresh(org)
-    logger.info("organization_updated", organization_id=str(organization_id))
     return OrganizationOut.model_validate(org)

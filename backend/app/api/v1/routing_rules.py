@@ -11,16 +11,17 @@ from app.db.models.user import User
 from app.repositories.routing_rule_repo import RoutingRuleRepo
 from app.schemas.routing_rule import RoutingRuleCreate, RoutingRuleOut, RoutingRuleUpdate
 
-logger = get_logger(__name__)
-
 router = APIRouter(prefix="/v1/routing-rules", tags=["routing_rules"])
+logger = get_logger(__name__)
 
 
 @router.get("", response_model=list[RoutingRuleOut])
 async def list_routing_rules(
     user: User = Depends(require_roles(UserRole.admin)), repo: RoutingRuleRepo = Depends(get_routing_rule_repo)
 ) -> list[RoutingRuleOut]:
-    return [RoutingRuleOut.model_validate(r) for r in await repo.list_all()]
+    rules = await repo.list_all()
+    logger.info("listing routing rules", user_id=user.id, count=len(rules))
+    return [RoutingRuleOut.model_validate(r) for r in rules]
 
 
 @router.post("", response_model=RoutingRuleOut, status_code=201)
@@ -29,6 +30,7 @@ async def create_routing_rule(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: RoutingRuleRepo = Depends(get_routing_rule_repo),
 ) -> RoutingRuleOut:
+    logger.info("creating routing rule", user_id=user.id, model_alias=body.model_alias, capability=body.capability.value, priority=body.priority)
     rule = await repo.add(
         RoutingRule(
             model_alias=body.model_alias,
@@ -41,7 +43,6 @@ async def create_routing_rule(
             is_active=body.is_active,
         )
     )
-    logger.info("routing_rule_created", rule_id=str(rule.id), model_alias=rule.model_alias, strategy=rule.strategy.value)
     return RoutingRuleOut.model_validate(rule)
 
 
@@ -52,6 +53,7 @@ async def update_routing_rule(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: RoutingRuleRepo = Depends(get_routing_rule_repo),
 ) -> RoutingRuleOut:
+    logger.info("updating routing rule", user_id=user.id, rule_id=str(rule_id), fields=list(body.model_dump(exclude_none=True).keys()))
     rule = await repo.get(rule_id)
     if rule is None:
         raise NotFoundError("Routing rule not found")
@@ -65,5 +67,4 @@ async def update_routing_rule(
         rule.is_active = body.is_active
     await repo.db.flush()
     await repo.db.refresh(rule)
-    logger.info("routing_rule_updated", rule_id=str(rule_id))
     return RoutingRuleOut.model_validate(rule)
