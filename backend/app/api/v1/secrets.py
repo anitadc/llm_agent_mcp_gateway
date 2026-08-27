@@ -14,6 +14,8 @@ from app.schemas.secret import (
     SecretProviderInfo,
     SecretRotateRequest,
     SecretRotateResponse,
+    SecretSetRequest,
+    SecretSetResponse,
     SecretStatusOut,
 )
 from app.secrets.factory import list_provider_metadata
@@ -83,6 +85,39 @@ async def get_secret_status(
                 status=audit_status,
             )
     return results
+
+
+@router.post("", response_model=SecretSetResponse, status_code=201)
+async def set_secret(
+    body: SecretSetRequest,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(require_roles(UserRole.admin)),
+    secret_service: SecretService = Depends(get_secret_service),
+    settings: Settings = Depends(get_settings),
+) -> SecretSetResponse:
+    """Writes a secret value through to whichever backend SECRET_PROVIDER points
+    at (Postgres by default) and invalidates any stale cached copy. The value
+    itself is taken only from the request body -- never logged, never echoed
+    back in the response, and never passed to record_secret_audit."""
+    audit_status = SecretAuditStatus.success
+    try:
+        await secret_service.set_secret(body.secret_name, body.value, tenant=body.tenant)
+        status: str = "set"
+    except ProviderError:
+        logger.exception("secret_set_failed", secret_name=body.secret_name, tenant=body.tenant)
+        status = "error"
+        audit_status = SecretAuditStatus.error
+
+    background_tasks.add_task(
+        record_secret_audit,
+        tenant_id=body.tenant,
+        operation=SecretOperation.set,
+        provider=settings.secret_provider,
+        secret_name=body.secret_name,
+        user_id=user.id,
+        status=audit_status,
+    )
+    return SecretSetResponse(secret_name=body.secret_name, provider=settings.secret_provider, status=status)
 
 
 @router.post("/rotate", response_model=SecretRotateResponse)

@@ -24,6 +24,18 @@ class SecretStatusOut(BaseModel):
     status: Literal["configured", "not_configured", "error"]
 
 
+class SecretSetRequest(BaseModel):
+    secret_name: str
+    value: str
+    tenant: str | None = None
+
+
+class SecretSetResponse(BaseModel):
+    secret_name: str
+    provider: str
+    status: Literal["set", "error"]
+
+
 class SecretRotateRequest(BaseModel):
     secret_name: str
     tenant: str | None = None

@@ -39,6 +39,8 @@ const AUDIT_BADGE = { success: "ok", error: "down" };
 export function SecretSettings() {
   const { showToast } = useToast();
   const [rotatingProvider, setRotatingProvider] = useState(null);
+  const [savingSecret, setSavingSecret] = useState(false);
+  const [secretForm, setSecretForm] = useState({ secret_name: "", value: "" });
   const { page, pageSize, setPage, nextPage, prevPage } = usePagination(1, 10);
 
   const { data: providerConfig, loading: providersLoading } = useApi(() => endpoints.getSecretProviders(), []);
@@ -47,6 +49,22 @@ export function SecretSettings() {
     () => endpoints.getSecretAuditLog({ page, page_size: pageSize }),
     [page, pageSize]
   );
+
+  async function handleSetSecret(e) {
+    e.preventDefault();
+    setSavingSecret(true);
+    try {
+      await endpoints.setSecret(secretForm);
+      showToast(`Saved ${secretForm.secret_name}`, "success");
+      setSecretForm({ secret_name: "", value: "" });
+      refetchStatus();
+      refetchAuditLog();
+    } catch (err) {
+      showToast(err?.message ?? "Failed to save secret", "error");
+    } finally {
+      setSavingSecret(false);
+    }
+  }
 
   async function handleRotate(providerLabel) {
     setRotatingProvider(providerLabel);
@@ -100,6 +118,45 @@ export function SecretSettings() {
             emptyMessage="No providers found"
           />
         )}
+      </div>
+
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-gray-700">Set a Secret Value</h3>
+        <p className="mb-3 text-xs text-gray-500">
+          Writes through to the active Secret Provider above (e.g. <code className="rounded bg-gray-100 px-1">OPENAI_API_KEY</code>,{" "}
+          <code className="rounded bg-gray-100 px-1">ANTHROPIC_API_KEY</code>). The value is never shown again after this form
+          submits -- only whether the write succeeded is recorded.
+        </p>
+        <form onSubmit={handleSetSecret} className="flex items-end gap-2">
+          <div className="flex-1">
+            <label className="block text-xs text-gray-500">Secret name</label>
+            <input
+              required
+              value={secretForm.secret_name}
+              onChange={(e) => setSecretForm({ ...secretForm, secret_name: e.target.value })}
+              placeholder="OPENAI_API_KEY"
+              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs text-gray-500">Value</label>
+            <input
+              required
+              type="password"
+              autoComplete="off"
+              value={secretForm.value}
+              onChange={(e) => setSecretForm({ ...secretForm, value: e.target.value })}
+              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={savingSecret}
+            className="rounded bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          >
+            {savingSecret ? "Saving..." : "Save"}
+          </button>
+        </form>
       </div>
 
       <div>
