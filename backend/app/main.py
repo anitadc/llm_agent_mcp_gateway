@@ -34,6 +34,7 @@ from app.api.v1 import (
 from app.core.config import get_settings
 from app.core.exceptions import GatewayException
 from app.core.logging import configure_logging
+from app.db.schema_cleanup import drop_stale_updatedat_triggers
 from app.db.session import async_session_factory
 from app.middleware.auth_middleware import AuthMiddleware
 from app.middleware.rate_limit_middleware import RateLimitMiddleware
@@ -102,6 +103,10 @@ async def _cancel_task(task: asyncio.Task | None) -> None:
 @app.on_event("startup")
 async def _start_background_tasks() -> None:
     global _discovery_refresh_task, _health_check_task
+    async with async_session_factory() as session:
+        await drop_stale_updatedat_triggers(session)
+        await session.commit()
+
     if settings.mcp_discovery_refresh_seconds > 0:
         _discovery_refresh_task = asyncio.create_task(_discovery_refresh_loop())
     if settings.mcp_health_check_interval_seconds > 0:
