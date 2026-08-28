@@ -4,6 +4,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: wn_postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: gateway
       POSTGRES_USER: gateway
@@ -21,6 +22,7 @@ services:
   valkey:
     image: valkey/valkey:latest
     container_name: wn_valkey
+    restart: unless-stopped
     ports:
       - "${VALKEY_HOST_PORT:-6390}:6379"
     healthcheck:
@@ -32,6 +34,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:25.0
     container_name: wn_keycloak
+    restart: unless-stopped
     command: start-dev --import-realm
     environment:
       KEYCLOAK_ADMIN: admin
@@ -55,6 +58,7 @@ services:
   guardrails-mock:
     build: ./mock-guardrails
     container_name: wn_guardrails_mock
+    restart: unless-stopped
     ports:
       - "${GUARDRAILS_HOST_PORT:-9100}:9000"
 
@@ -81,6 +85,7 @@ services:
   gateway-backend:
     build: ./backend
     container_name: wn_gateway_backend
+    restart: unless-stopped
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level ${LOG_LEVEL:-debug}"
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
@@ -154,6 +159,7 @@ services:
         VITE_KEYCLOAK_REALM: gateway
         VITE_KEYCLOAK_CLIENT_ID: gateway-frontend
     container_name: wn_gateway_frontend
+    restart: unless-stopped
     ports:
       - "${FRONTEND_HOST_PORT:-5173}:5173"
     depends_on:

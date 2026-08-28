@@ -2,10 +2,14 @@ from abc import ABC, abstractmethod
 from functools import lru_cache
 from typing import Any
 
+import httpx
 import jwt
 
 from app.core.exceptions import AuthError
+from app.core.logging import get_logger
 from app.identity.models import UserIdentity
+
+logger = get_logger(__name__)
 
 
 @lru_cache(maxsize=32)
@@ -38,6 +42,29 @@ def validate_oidc_jwt(token: str, *, jwks_url: str, issuer: str | None, audience
             },
         )
     except jwt.PyJWTError as exc:
+        # Attempt to surface debug info: token `kid` and available JWKS keys.
+        try:
+            unverified_hdr = jwt.get_unverified_header(token)
+            token_kid = unverified_hdr.get("kid")
+        except Exception:
+            token_kid = None
+
+        jwks_keys = None
+        try:
+            resp = httpx.get(jwks_url, timeout=5.0)
+            resp.raise_for_status()
+            jwks_json = resp.json()
+            jwks_keys = [k.get("kid") for k in jwks_json.get("keys", [])]
+        except Exception as e:
+            logger.debug("Failed to fetch JWKS for debug", jwks_url=jwks_url, error=str(e))
+
+        logger.warning(
+            "Token validation failed: no matching signing key",
+            jwks_url=jwks_url,
+            token_kid=token_kid,
+            jwks_kids=jwks_keys,
+            error=str(exc),
+        )
         raise AuthError(f"Token validation failed: {exc}") from exc
 
 
