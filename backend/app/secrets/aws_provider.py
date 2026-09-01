@@ -2,7 +2,10 @@ import asyncio
 
 from app.core.config import Settings
 from app.core.exceptions import ProviderError
+from app.core.logging import get_logger
 from app.secrets.base import SecretProvider
+
+logger = get_logger(__name__)
 
 
 class AWSSecretsProvider(SecretProvider):
@@ -30,32 +33,42 @@ class AWSSecretsProvider(SecretProvider):
         return getattr(exc, "response", {}).get("Error", {}).get("Code") == "ResourceNotFoundException"
 
     async def get_secret(self, secret_name: str, tenant: str | None = None) -> str | None:
+        import botocore.exceptions
+
         try:
             response = await asyncio.to_thread(self._client.get_secret_value, SecretId=self._full_name(secret_name, tenant))
-        except Exception as exc:
+        except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as exc:
             if self._is_not_found(exc):
                 return None
+            logger.exception("aws_secrets_get_failed", secret_name=secret_name, tenant=tenant)
             raise ProviderError(f"AWS Secrets Manager get_secret failed: {exc}") from exc
         return response.get("SecretString")
 
     async def set_secret(self, secret_name: str, value: str, tenant: str | None = None) -> None:
+        import botocore.exceptions
+
         name = self._full_name(secret_name, tenant)
         try:
             await asyncio.to_thread(self._client.put_secret_value, SecretId=name, SecretString=value)
-        except Exception as exc:
+        except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as exc:
             if not self._is_not_found(exc):
+                logger.exception("aws_secrets_set_failed", secret_name=secret_name, tenant=tenant)
                 raise ProviderError(f"AWS Secrets Manager set_secret failed: {exc}") from exc
             try:
                 await asyncio.to_thread(self._client.create_secret, Name=name, SecretString=value)
-            except Exception as create_exc:
+            except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as create_exc:
+                logger.exception("aws_secrets_create_failed", secret_name=secret_name, tenant=tenant)
                 raise ProviderError(f"AWS Secrets Manager create_secret failed: {create_exc}") from create_exc
 
     async def delete_secret(self, secret_name: str, tenant: str | None = None) -> None:
+        import botocore.exceptions
+
         name = self._full_name(secret_name, tenant)
         try:
             # No ForceDeleteWithoutRecovery: AWS's default recovery window (7-30
             # days) protects against an accidental/malicious delete being permanent.
             await asyncio.to_thread(self._client.delete_secret, SecretId=name)
-        except Exception as exc:
+        except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as exc:
             if not self._is_not_found(exc):
+                logger.exception("aws_secrets_delete_failed", secret_name=secret_name, tenant=tenant)
                 raise ProviderError(f"AWS Secrets Manager delete_secret failed: {exc}") from exc

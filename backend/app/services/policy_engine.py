@@ -1,8 +1,11 @@
 import uuid
 from dataclasses import dataclass
 
+from app.core.logging import get_logger
 from app.db.models.access_policy import AccessPolicy
 from app.repositories.access_policy_repo import AccessPolicyRepo
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -57,6 +60,14 @@ class PolicyEngine:
 
         if any(self._matches(policy, roles, identity_provider, tool_name, agent_key) for policy in policies):
             return PolicyDecision(allowed=True)
+        logger.warning(
+            "policy_denied",
+            project_id=str(project_id) if project_id else None,
+            roles=roles,
+            identity_provider=identity_provider,
+            tool_name=tool_name,
+            agent_key=agent_key,
+        )
         return PolicyDecision(
             allowed=False, reason="No access policy permits this role / identity provider / tool / agent combination"
         )

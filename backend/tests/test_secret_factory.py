@@ -6,7 +6,12 @@ from app.secrets.azure_provider import AzureKeyVaultProvider
 from app.secrets.factory import get_secret_provider, is_provider_available, list_provider_metadata
 from app.secrets.gcp_provider import GCPSecretProvider
 from app.secrets.infisical_provider import InfisicalProvider
+from app.secrets.postgres_provider import PostgresSecretProvider
 from app.secrets.vault_provider import VaultProvider
+
+# A syntactically valid (though not secret) Fernet key, purely so
+# PostgresSecretProvider.__init__ doesn't reject it as malformed.
+_TEST_FERNET_KEY = "ZkcyJKfplZZRbdiUXnsC15rHoufpJvBoThi14IV8tiQ="
 
 
 def _settings(**overrides) -> Settings:
@@ -22,6 +27,11 @@ def _settings(**overrides) -> Settings:
     )
     defaults.update(overrides)
     return Settings(**defaults)
+
+
+def test_factory_returns_postgres_provider_by_default() -> None:
+    settings = _settings(secret_provider="postgres", secret_storage_encryption_key=_TEST_FERNET_KEY)
+    assert isinstance(get_secret_provider(settings), PostgresSecretProvider)
 
 
 def test_factory_returns_infisical_provider_by_default() -> None:
@@ -66,7 +76,7 @@ def test_factory_rejects_unknown_provider() -> None:
 def test_list_provider_metadata_reports_all_five() -> None:
     settings = _settings(secret_provider="infisical")
     metadata = list_provider_metadata(settings)
-    assert {m["name"] for m in metadata} == {"infisical", "aws", "gcp", "azure", "vault"}
+    assert {m["name"] for m in metadata} == {"postgres", "infisical", "aws", "gcp", "azure", "vault"}
 
 
 def test_is_provider_available_reflects_config_presence() -> None:
@@ -74,5 +84,5 @@ def test_is_provider_available_reflects_config_presence() -> None:
     assert is_provider_available("infisical", unconfigured) is False
     assert is_provider_available("aws", unconfigured) is False
 
-    configured = _settings(infisical_client_id="id", infisical_client_secret="secret", infisical_project_id="proj")
-    assert is_provider_available("infisical", configured) is True
+    configured = _settings(secret_storage_encryption_key=_TEST_FERNET_KEY)
+    assert is_provider_available("postgres", configured) is True

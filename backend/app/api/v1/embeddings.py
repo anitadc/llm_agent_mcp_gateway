@@ -25,8 +25,9 @@ from app.services.guardrails.base import GuardrailsClient, GuardrailVerdict
 from app.services.logging_service import record_request
 from app.services.routing.router import GatewayRouter
 
-router = APIRouter(prefix="/v1", tags=["embeddings"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/v1", tags=["embeddings"])
 
 
 @router.post("/embeddings", response_model=EmbeddingResponse)
@@ -86,6 +87,7 @@ async def create_embedding(
     prompt_verdict = await guardrails.check_prompt(prompt_text, context)
     if not prompt_verdict.allowed:
         log(status=RequestStatus.blocked, guardrail_verdicts=[(GuardrailDirection.prompt, prompt_verdict)])
+        logger.warning("guardrail_blocked", request_id=str(request_id), direction="prompt", model=body.model)
         raise GuardrailBlockedError("Input violates policy")
     # No response-side guardrail check here: an embedding is a vector, not text (TDD.md §3.3/§6.4).
 
@@ -143,10 +145,11 @@ async def create_embedding(
         guardrail_verdicts=[(GuardrailDirection.prompt, prompt_verdict)],
     )
     logger.info(
-        "embedding request completed",
-        request_id=request_id,
+        "embedding_completed",
+        request_id=str(request_id),
         resolved_provider=provider_response.resolved_provider,
         resolved_model=provider_response.resolved_model,
+        cache_hit=False,
         prompt_tokens=usage.prompt_tokens,
         latency_ms=int((time.perf_counter() - start) * 1000),
     )

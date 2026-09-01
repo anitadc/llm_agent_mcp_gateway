@@ -13,8 +13,9 @@ from app.repositories.mcp_server_repo import McpServerRepo
 from app.schemas.mcp import McpServerCreate, McpServerOut, McpServerStatsOut, McpServerUpdate
 from app.services.mcp.health_checker import HealthChecker
 
-router = APIRouter(prefix="/mcp/servers", tags=["mcp_servers"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/mcp/servers", tags=["mcp_servers"])
 
 
 @router.get("", response_model=list[McpServerOut])
@@ -44,6 +45,13 @@ async def create_mcp_server(
             extra_metadata=body.metadata,
         )
     )
+    logger.info(
+        "mcp_server_created",
+        server_id=str(server.id),
+        server_name=server.name,
+        base_url=server.base_url,
+        user_id=str(user.id),
+    )
     return McpServerOut.from_model(server)
 
 
@@ -70,6 +78,12 @@ async def update_mcp_server(
         server.extra_metadata = body.metadata
     await repo.db.flush()
     await repo.db.refresh(server)
+    logger.info(
+        "mcp_server_updated",
+        server_id=str(server.id),
+        server_name=server.name,
+        user_id=str(user.id),
+    )
     return McpServerOut.from_model(server)
 
 
@@ -83,6 +97,7 @@ async def delete_mcp_server(
     server = await repo.get(server_id)
     if server is None:
         raise NotFoundError("MCP server not found")
+    logger.info("mcp_server_deleted", server_id=str(server.id), server_name=server.name, user_id=str(user.id))
     await repo.delete(server)
 
 
@@ -98,6 +113,13 @@ async def trigger_health_check(
     if server is None:
         raise NotFoundError("MCP server not found")
     await health_checker.probe(server)
+    logger.info(
+        "mcp_server_health_check_triggered",
+        server_id=str(server.id),
+        server_name=server.name,
+        health_status=str(server.health_status),
+        user_id=str(user.id),
+    )
     return McpServerOut.from_model(server)
 
 

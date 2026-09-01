@@ -33,7 +33,7 @@ from app.api.v1 import (
 )
 from app.core.config import get_settings
 from app.core.exceptions import GatewayException
-from app.core.logging import configure_logging
+from app.core.logging import configure_logging, get_logger
 from app.db.schema_cleanup import drop_stale_updatedat_triggers
 from app.db.session import async_session_factory
 from app.middleware.auth_middleware import AuthMiddleware
@@ -47,6 +47,7 @@ from app.services.mcp.mcp_client import McpClient
 
 settings = get_settings()
 configure_logging(settings.log_level)
+logger = get_logger(__name__)
 
 app = FastAPI(title="Custom LLM Gateway", version="1.0.0")
 
@@ -74,11 +75,16 @@ async def _discovery_refresh_loop() -> None:
     remove tools without an operator triggering a sync by hand."""
     while True:
         await asyncio.sleep(settings.mcp_discovery_refresh_seconds)
-        async with async_session_factory() as session:
-            health_checker = HealthChecker(McpServerRepo(session), McpClient(settings))
-            discovery = DiscoveryService(McpServerRepo(session), McpToolRepo(session), McpClient(settings), health_checker)
-            await discovery.sync_all()
-            await session.commit()
+        # Broad catch is deliberate: this loop must survive one bad sync cycle and
+        # keep running on the next interval rather than dying silently forever.
+        try:
+            async with async_session_factory() as session:
+                health_checker = HealthChecker(McpServerRepo(session), McpClient(settings))
+                discovery = DiscoveryService(McpServerRepo(session), McpToolRepo(session), McpClient(settings), health_checker)
+                await discovery.sync_all()
+                await session.commit()
+        except Exception as exc:
+            logger.exception("discovery_refresh_loop_failed", error=str(exc))
 
 
 async def _health_check_loop() -> None:
@@ -87,10 +93,15 @@ async def _health_check_loop() -> None:
     health_status (and therefore in routing/tools-list filtering) quickly."""
     while True:
         await asyncio.sleep(settings.mcp_health_check_interval_seconds)
-        async with async_session_factory() as session:
-            health_checker = HealthChecker(McpServerRepo(session), McpClient(settings))
-            await health_checker.check_all()
-            await session.commit()
+        # Broad catch is deliberate: this loop must survive one bad health-check cycle
+        # and keep running on the next interval rather than dying silently forever.
+        try:
+            async with async_session_factory() as session:
+                health_checker = HealthChecker(McpServerRepo(session), McpClient(settings))
+                await health_checker.check_all()
+                await session.commit()
+        except Exception as exc:
+            logger.exception("health_check_loop_failed", error=str(exc))
 
 
 async def _cancel_task(task: asyncio.Task | None) -> None:
@@ -128,6 +139,27 @@ async def gateway_exception_handler(request: Request, exc: GatewayException) -> 
             "error": {
                 "code": exc.code,
                 "message": exc.message,
+                "request_id": str(request_id) if request_id else None,
+            }
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+    logger.exception(
+        "unhandled_exception",
+        path=request.url.path,
+        method=request.method,
+        request_id=str(request_id) if request_id else None,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "internal_error",
+                "message": "An unexpected error occurred.",
                 "request_id": str(request_id) if request_id else None,
             }
         },

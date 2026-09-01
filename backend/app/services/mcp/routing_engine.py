@@ -1,8 +1,11 @@
 from app.core.exceptions import NotFoundError
+from app.core.logging import get_logger
 from app.db.models.enums import ApiServiceStatus, McpToolSourceType
 from app.db.models.mcp_tool import McpTool
 from app.repositories.mcp_tool_repo import McpToolRepo
 from app.services.mcp.health_checker import HealthChecker
+
+logger = get_logger(__name__)
 
 
 class RoutingEngine:
@@ -18,7 +21,16 @@ class RoutingEngine:
 
     async def resolve_tool(self, name: str) -> McpTool:
         tool = await self.tool_repo.get_by_name(name)
-        if tool is None or not tool.enabled or not self.is_routable(tool):
+        if tool is None:
+            logger.warning("mcp_tool_unknown", tool_name=name)
+            raise NotFoundError(f"Unknown or unavailable MCP tool '{name}'")
+        if not tool.enabled or not self.is_routable(tool):
+            logger.warning(
+                "mcp_tool_unavailable",
+                tool_name=name,
+                enabled=tool.enabled,
+                source_type=str(tool.source_type),
+            )
             raise NotFoundError(f"Unknown or unavailable MCP tool '{name}'")
         return tool
 

@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     # Accept an explicitly empty value from Compose/environment when no backend is
     # configured for this deployment. "unset" is a valid state for local/dev stacks
     # that only use plain env vars or a different secret source.
-    secret_provider: Literal["infisical", "aws", "gcp", "azure", "vault"] | None = None
+    secret_provider: Literal["postgres", "infisical", "aws", "gcp", "azure", "vault"] | None = None
     # Redis/Valkey cache TTL for resolved secret values -- bounds how long a
     # provider outage or a rotated-but-not-yet-invalidated value can linger.
     secret_cache_ttl_seconds: int = 300
@@ -98,6 +98,12 @@ class Settings(BaseSettings):
     infisical_client_secret: str | None = None
     infisical_project_id: str | None = None
     infisical_environment: str = "prod"
+
+    # Fernet key (Fernet.generate_key()) encrypting values stored by
+    # PostgresSecretProvider -- required only when secret_provider="postgres".
+    # Never derived from another secret here: rotating this key independently
+    # of everything else is exactly the point.
+    secret_storage_encryption_key: str | None = None
 
     aws_secrets_region: str | None = None
     aws_secret_name_prefix: str = "llm-gateway"

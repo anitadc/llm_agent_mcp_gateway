@@ -24,8 +24,9 @@ from app.schemas.identity import (
     TenantIdentityConfigUpdate,
 )
 
-router = APIRouter(prefix="/admin/identity", tags=["identity"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/admin/identity", tags=["identity"])
 
 
 @router.get("/providers", response_model=IdentityProviderConfigOut)
@@ -67,6 +68,7 @@ async def create_tenant_config(
             tenant_id=body.tenant_id, provider=body.provider, issuer=body.issuer, configuration=body.configuration
         )
     )
+    logger.info("tenant_identity_config_created", config_id=str(config.id), tenant_id=config.tenant_id, provider=config.provider)
     return TenantIdentityConfigOut.model_validate(config)
 
 
@@ -80,6 +82,7 @@ async def update_tenant_config(
     logger.info("updating tenant identity config", admin_user_id=user.id, config_id=str(config_id), fields=list(body.model_dump(exclude_none=True).keys()))
     config = await repo.get(config_id)
     if config is None:
+        logger.warning("tenant_identity_config_not_found", config_id=str(config_id))
         raise NotFoundError("Tenant identity config not found")
     if body.provider is not None:
         config.provider = body.provider
@@ -89,6 +92,7 @@ async def update_tenant_config(
         config.configuration = body.configuration
     await repo.db.flush()
     await repo.db.refresh(config)
+    logger.info("tenant_identity_config_updated", config_id=str(config.id), tenant_id=config.tenant_id)
     return TenantIdentityConfigOut.model_validate(config)
 
 
@@ -101,8 +105,10 @@ async def delete_tenant_config(
     logger.info("deleting tenant identity config", admin_user_id=user.id, config_id=str(config_id))
     config = await repo.get(config_id)
     if config is None:
+        logger.warning("tenant_identity_config_not_found", config_id=str(config_id))
         raise NotFoundError("Tenant identity config not found")
     await repo.delete(config)
+    logger.info("tenant_identity_config_deleted", config_id=str(config_id), tenant_id=config.tenant_id)
 
 
 @router.get("/access-policies", response_model=list[AccessPolicyOut])
@@ -134,6 +140,7 @@ async def create_access_policy(
             is_active=body.is_active,
         )
     )
+    logger.info("access_policy_created", policy_id=str(policy.id), project_id=str(policy.project_id) if policy.project_id else None, name=policy.name)
     return AccessPolicyOut.model_validate(policy)
 
 
@@ -147,6 +154,7 @@ async def update_access_policy(
     logger.info("updating access policy", admin_user_id=user.id, policy_id=str(policy_id), fields=list(body.model_dump(exclude_none=True).keys()))
     policy = await repo.get(policy_id)
     if policy is None:
+        logger.warning("access_policy_not_found", policy_id=str(policy_id))
         raise NotFoundError("Access policy not found")
     if body.allowed_roles is not None:
         policy.allowed_roles = body.allowed_roles
@@ -162,6 +170,7 @@ async def update_access_policy(
         policy.is_active = body.is_active
     await repo.db.flush()
     await repo.db.refresh(policy)
+    logger.info("access_policy_updated", policy_id=str(policy.id))
     return AccessPolicyOut.model_validate(policy)
 
 
@@ -174,5 +183,7 @@ async def delete_access_policy(
     logger.info("deleting access policy", admin_user_id=user.id, policy_id=str(policy_id))
     policy = await repo.get(policy_id)
     if policy is None:
+        logger.warning("access_policy_not_found", policy_id=str(policy_id))
         raise NotFoundError("Access policy not found")
     await repo.delete(policy)
+    logger.info("access_policy_deleted", policy_id=str(policy_id))

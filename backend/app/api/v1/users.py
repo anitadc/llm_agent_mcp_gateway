@@ -10,8 +10,9 @@ from app.db.models.user import User
 from app.repositories.user_repo import UserRepo
 from app.schemas.user import UserCreate, UserOut, UserUpdate
 
-router = APIRouter(prefix="/v1/users", tags=["users"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/v1/users", tags=["users"])
 
 
 @router.get("", response_model=list[UserOut])
@@ -33,6 +34,7 @@ async def create_user(
 ) -> UserOut:
     logger.info("creating user", admin_user_id=user.id, email=body.email, role=body.role.value, organization_id=str(body.organization_id) if body.organization_id else None)
     new_user = await repo.add(User(email=body.email, role=body.role, organization_id=body.organization_id))
+    logger.info("user_created", user_id=str(new_user.id), role=new_user.role.value)
     return UserOut.model_validate(new_user)
 
 
@@ -53,4 +55,5 @@ async def update_user(
         target.organization_id = body.organization_id
     await repo.db.flush()
     await repo.db.refresh(target)
+    logger.info("user_updated", user_id=str(user_id), role=target.role.value)
     return UserOut.model_validate(target)

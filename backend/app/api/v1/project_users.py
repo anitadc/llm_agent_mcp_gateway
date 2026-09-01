@@ -11,8 +11,9 @@ from app.db.models.user import User
 from app.repositories.project_user_repo import ProjectUserRepo
 from app.schemas.project_user import ProjectUserCreate, ProjectUserOut, ProjectUserUpdate
 
-router = APIRouter(prefix="/v1/project-users", tags=["project_users"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/v1/project-users", tags=["project_users"])
 
 
 @router.get("", response_model=list[ProjectUserOut])
@@ -38,6 +39,7 @@ async def add_project_user(
     if body.start_date is not None:
         kwargs["start_date"] = body.start_date
     membership = await repo.add(ProjectUser(**kwargs))
+    logger.info("project_user_added", project_user_id=str(membership.id), project_id=str(body.project_id))
     return ProjectUserOut.model_validate(membership)
 
 
@@ -58,4 +60,5 @@ async def update_project_user(
         membership.end_date = body.end_date
     await repo.db.flush()
     await repo.db.refresh(membership)
+    logger.info("project_user_updated", project_user_id=str(project_user_id))
     return ProjectUserOut.model_validate(membership)

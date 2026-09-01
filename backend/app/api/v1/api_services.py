@@ -20,8 +20,9 @@ from app.schemas.api_service import (
 )
 from app.services.api_registry.api_registry_service import ApiRegistryService
 
-router = APIRouter(prefix="/mcp/api-services", tags=["api_registry"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/mcp/api-services", tags=["api_registry"])
 
 
 @router.get("", response_model=list[ApiServiceOut])
@@ -55,6 +56,7 @@ async def create_api_service(
             extra_metadata=body.metadata,
         )
     )
+    logger.info("api_service_created", api_service_id=str(service.id), name=service.name)
     return ApiServiceOut.from_model(service)
 
 
@@ -91,6 +93,7 @@ async def update_api_service(
         service.extra_metadata = body.metadata
     await repo.db.flush()
     await repo.db.refresh(service)
+    logger.info("api_service_updated", api_service_id=str(service_id))
     return ApiServiceOut.from_model(service)
 
 
@@ -107,6 +110,7 @@ async def delete_api_service(
     # Cascades to api_endpoints, and from there to each endpoint's paired McpTool
     # row, via the FKs' ondelete=CASCADE -- same pattern as deleting an McpServer.
     await repo.delete(service)
+    logger.info("api_service_deleted", api_service_id=str(service_id))
 
 
 @router.get("/{service_id}/endpoints", response_model=list[ApiEndpointOut])
