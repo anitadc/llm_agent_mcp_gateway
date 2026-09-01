@@ -48,6 +48,13 @@ def test_factory_returns_the_configured_provider_type(provider_name, expected_ty
     assert isinstance(get_identity_provider(settings), expected_type)
 
 
+def test_factory_accepts_none_as_an_explicitly_disabled_provider() -> None:
+    settings = _settings(identity_provider=None)
+    assert settings.identity_provider is None
+    with pytest.raises(ValueError, match="IDENTITY_PROVIDER.*configured"):
+        get_identity_provider(settings)
+
+
 def test_factory_rejects_an_unknown_provider() -> None:
     settings = _settings()
     settings.identity_provider = "unknown-provider"
