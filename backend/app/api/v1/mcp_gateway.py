@@ -16,7 +16,7 @@ from app.api.deps import (
     mcp_scopes_for,
 )
 from app.core.config import Settings, get_settings
-from app.core.exceptions import BadRequestError, ForbiddenError
+from app.core.exceptions import BadRequestError, ForbiddenError, GatewayException
 from app.core.logging import get_logger
 from app.db.models.enums import McpToolSourceType, RequestStatus
 from app.db.models.mcp_session import McpSession
@@ -34,8 +34,9 @@ from app.services.mcp.session_manager import SessionManager
 from app.services.policy_engine import PolicyEngine
 from app.services.rate_limit_service import RateLimitService
 
-router = APIRouter(tags=["mcp_gateway"])
 logger = get_logger(__name__)
+
+router = APIRouter(tags=["mcp_gateway"])
 
 
 def _identity(principal: Principal) -> tuple[uuid.UUID | None, uuid.UUID | None, uuid.UUID | None]:
@@ -180,9 +181,27 @@ async def mcp_gateway(
             latency_ms=int((time.perf_counter() - start) * 1000),
         )
         return JsonRpcResponse(id=body.id, result=result)
-    except Exception:
+    except Exception as exc:
+        # Broad on purpose: this must catch both expected GatewayExceptions (bad
+        # request, forbidden, unavailable tool, ...) and genuine bugs so `status`
+        # is always correct for record_mcp_request below. Severity of the log
+        # reflects which kind actually happened.
         if status == RequestStatus.success:
             status = RequestStatus.error
+        if isinstance(exc, GatewayException) and exc.status_code < 500:
+            logger.warning(
+                "mcp_gateway_request_rejected",
+                method=body.method,
+                tool_name=tool_name,
+                error_code=exc.code,
+            )
+        else:
+            logger.exception(
+                "mcp_gateway_request_failed",
+                method=body.method,
+                tool_name=tool_name,
+                server_id=str(server_id) if server_id else None,
+            )
         raise
     finally:
         background_tasks.add_task(

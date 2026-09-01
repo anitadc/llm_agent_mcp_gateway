@@ -3,8 +3,11 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+import openai
+
 from app.core.config import Settings
 from app.core.exceptions import ProviderError
+from app.core.logging import get_logger
 from app.db.models.enums import ModelCapability, RoutingStrategy
 from app.db.models.routing_rule import RoutingRule
 from app.repositories.model_pricing_repo import ModelPricingRepo
@@ -12,6 +15,8 @@ from app.repositories.request_log_repo import RequestLogRepo
 from app.repositories.routing_rule_repo import RoutingRuleRepo
 from app.secrets.service import SecretService
 from app.services.routing.model_registry import build_router
+
+logger = get_logger(__name__)
 
 # Targets with no (or too little) recent latency data sort after every target that
 # has real data, rather than winning by default -- same "unknown = worst" convention
@@ -57,6 +62,7 @@ class GatewayRouter:
     ) -> tuple[RoutingRule, list[dict[str, Any]]]:
         rule = await self.rules_repo.find_best_match(model_alias, capability, project_id, user_id)
         if rule is None:
+            logger.warning("no_routing_rule_matched", model_alias=model_alias, capability=capability.value)
             raise ProviderError(f"No active routing rule for alias '{model_alias}' ({capability.value})")
         return rule, await self._order_targets(rule)
 
@@ -90,10 +96,22 @@ class GatewayRouter:
         router = await build_router(model_alias, targets, self.settings, self.secret_service)
         try:
             response = await router.acompletion(model=model_alias, messages=messages, **kwargs)
-        except Exception as exc:
+        except openai.APIError as exc:
+            logger.exception(
+                "provider_completion_failed",
+                model_alias=model_alias,
+                providers=[t["provider"] for t in targets],
+            )
             raise ProviderError(str(exc)) from exc
         resolved_model = getattr(response, "model", None)
-        return ProviderResponse(response, self._provider_for_model(targets, resolved_model), resolved_model)
+        resolved_provider = self._provider_for_model(targets, resolved_model)
+        logger.info(
+            "provider_completion_succeeded",
+            model_alias=model_alias,
+            resolved_provider=resolved_provider,
+            resolved_model=resolved_model,
+        )
+        return ProviderResponse(response, resolved_provider, resolved_model)
 
     async def embed(
         self,
@@ -106,10 +124,22 @@ class GatewayRouter:
         router = await build_router(model_alias, targets, self.settings, self.secret_service)
         try:
             response = await router.aembedding(model=model_alias, input=input)
-        except Exception as exc:
+        except openai.APIError as exc:
+            logger.exception(
+                "provider_embedding_failed",
+                model_alias=model_alias,
+                providers=[t["provider"] for t in targets],
+            )
             raise ProviderError(str(exc)) from exc
         resolved_model = getattr(response, "model", None)
-        return ProviderResponse(response, self._provider_for_model(targets, resolved_model), resolved_model)
+        resolved_provider = self._provider_for_model(targets, resolved_model)
+        logger.info(
+            "provider_embedding_succeeded",
+            model_alias=model_alias,
+            resolved_provider=resolved_provider,
+            resolved_model=resolved_model,
+        )
+        return ProviderResponse(response, resolved_provider, resolved_model)
 
     @staticmethod
     def _provider_for_model(targets: list[dict[str, Any]], model: str | None) -> str | None:

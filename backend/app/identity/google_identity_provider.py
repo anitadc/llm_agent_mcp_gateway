@@ -2,7 +2,10 @@ from typing import Any
 
 from app.core.config import Settings
 from app.core.exceptions import AuthError
+from app.core.logging import get_logger
 from app.identity.base import IdentityProvider, validate_oidc_jwt
+
+logger = get_logger(__name__)
 
 
 class GoogleIdentityProvider(IdentityProvider):
@@ -21,6 +24,11 @@ class GoogleIdentityProvider(IdentityProvider):
     async def validate_token(self, token: str) -> dict[str, Any]:
         claims = validate_oidc_jwt(token, jwks_url=self._jwks_url, issuer=self._issuer, audience=self._audience)
         if self._workspace_domain and claims.get("hd") != self._workspace_domain:
+            logger.warning(
+                "google_workspace_domain_mismatch",
+                required_domain=self._workspace_domain,
+                actual_domain=claims.get("hd"),
+            )
             raise AuthError(f"Google account is not a member of the required workspace domain '{self._workspace_domain}'")
         return claims
 

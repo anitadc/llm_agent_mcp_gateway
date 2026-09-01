@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 
 from app.api.deps import get_secret_audit_log_repo, get_secret_service, require_roles
 from app.core.config import Settings, get_settings
+from app.core.exceptions import ProviderError
 from app.core.logging import get_logger
 from app.db.models.enums import SecretAuditStatus, SecretOperation, UserRole
 from app.db.models.user import User
@@ -13,14 +14,17 @@ from app.schemas.secret import (
     SecretProviderInfo,
     SecretRotateRequest,
     SecretRotateResponse,
+    SecretSetRequest,
+    SecretSetResponse,
     SecretStatusOut,
 )
 from app.secrets.factory import list_provider_metadata
 from app.secrets.service import SecretService
 from app.services.logging_service import record_secret_audit
 
-router = APIRouter(prefix="/admin/secrets", tags=["secrets"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/admin/secrets", tags=["secrets"])
 
 # (display label, underlying secret name(s) that must ALL resolve for this
 # provider to be considered "configured"). AWS Bedrock needs a key pair; every
@@ -76,7 +80,7 @@ async def get_secret_status(
                 status=status,
                 configured=all(values),
             )
-        except Exception:
+        except ProviderError:
             status = "error"
             audit_status = SecretAuditStatus.error
             logger.exception(
@@ -99,6 +103,39 @@ async def get_secret_status(
     return results
 
 
+@router.post("", response_model=SecretSetResponse, status_code=201)
+async def set_secret(
+    body: SecretSetRequest,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(require_roles(UserRole.admin)),
+    secret_service: SecretService = Depends(get_secret_service),
+    settings: Settings = Depends(get_settings),
+) -> SecretSetResponse:
+    """Writes a secret value through to whichever backend SECRET_PROVIDER points
+    at (Postgres by default) and invalidates any stale cached copy. The value
+    itself is taken only from the request body -- never logged, never echoed
+    back in the response, and never passed to record_secret_audit."""
+    audit_status = SecretAuditStatus.success
+    try:
+        await secret_service.set_secret(body.secret_name, body.value, tenant=body.tenant)
+        status: str = "set"
+    except ProviderError:
+        logger.exception("secret_set_failed", secret_name=body.secret_name, tenant=body.tenant)
+        status = "error"
+        audit_status = SecretAuditStatus.error
+
+    background_tasks.add_task(
+        record_secret_audit,
+        tenant_id=body.tenant,
+        operation=SecretOperation.set,
+        provider=settings.secret_provider,
+        secret_name=body.secret_name,
+        user_id=user.id,
+        status=audit_status,
+    )
+    return SecretSetResponse(secret_name=body.secret_name, provider=settings.secret_provider, status=status)
+
+
 @router.post("/rotate", response_model=SecretRotateResponse)
 async def rotate_secret(
     body: SecretRotateRequest,
@@ -108,7 +145,7 @@ async def rotate_secret(
     settings: Settings = Depends(get_settings),
 ) -> SecretRotateResponse:
     """Manual rotation support: invalidates the cached value and re-fetches from
-    the provider (force_refresh=True), so a secret rotated in Infisical/AWS/GCP/
+    the provider (force_refresh=True), so a secret rotated in Postgres/Infisical/AWS/GCP/
     Azure/Vault takes effect immediately instead of waiting out the cache TTL."""
     logger.info(
         "rotating secret",
@@ -131,7 +168,8 @@ async def rotate_secret(
             )
         else:
             logger.info("secret rotation succeeded", secret_name=body.secret_name, tenant=body.tenant)
-    except Exception:
+    except ProviderError:
+        logger.exception("secret_rotate_failed", secret_name=body.secret_name, tenant=body.tenant)
         status = "error"
         audit_status = SecretAuditStatus.error
         logger.exception(

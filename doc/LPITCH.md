@@ -78,7 +78,7 @@ Every resolved identity is normalized into a single `UserIdentity` shape (user I
 
 ### Secret Management
 
-Provider credentials and other sensitive configuration values are never read from plain environment variables scattered through the codebase. A parallel `SecretProvider` abstraction, built on the same factory pattern, resolves every secret by name from exactly one configured backend. **Five backends are implemented today**: Infisical (the default), AWS Secrets Manager, Google Secret Manager, Azure Key Vault, and HashiCorp Vault. Resolved values are cached briefly (Valkey-backed, short TTL) to avoid a secret-store round trip on every request, with an explicit force-refresh path for rotation. No secret value is ever persisted to the application database or written to a log line — only metadata (which secret, by whom, when, success/failure) is recorded in an audit table.
+Provider credentials and other sensitive configuration values are never read from plain environment variables scattered through the codebase. A parallel `SecretProvider` abstraction, built on the same factory pattern, resolves every secret by name from exactly one configured backend. **Five backends are implemented today**: this app's own Postgres database (the default, Fernet-encrypted at rest), Infisical (the default), AWS Secrets Manager, Google Secret Manager, Azure Key Vault, and HashiCorp Vault. Resolved values are cached briefly (Valkey-backed, short TTL) to avoid a secret-store round trip on every request, with an explicit force-refresh path for rotation. No secret value is ever persisted to the application database or written to a log line — only metadata (which secret, by whom, when, success/failure) is recorded in an audit table.
 
 The API Registry's REST tool credentials (API key, bearer token, basic auth, OAuth2 client-credentials) are resolved through this exact same abstraction — a deliberate improvement over the MCP Server Registry's own outbound auth, which still reads a named environment variable directly rather than going through the Secret Provider layer.
 
@@ -172,6 +172,7 @@ flowchart LR
 
 | Backend | Status |
 |---|---|
+| Postgres | Implemented (default) |
 | Infisical | Implemented (default) |
 | AWS Secrets Manager | Implemented |
 | Azure Key Vault | Implemented |

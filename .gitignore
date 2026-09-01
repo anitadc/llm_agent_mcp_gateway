@@ -19,3 +19,5 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+docs
+README.md

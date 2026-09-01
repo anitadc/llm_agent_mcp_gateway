@@ -2,6 +2,7 @@ import uuid
 
 from app.core.config import Settings
 from app.core.exceptions import AuthError
+from app.core.logging import get_logger
 from app.core.security import generate_api_key, hash_api_key
 from app.db.models.api_key import ApiKey
 from app.db.models.enums import IdentityProviderName, UserRole
@@ -10,6 +11,8 @@ from app.identity.models import UserIdentity
 from app.repositories.api_key_repo import ApiKeyRepo
 from app.repositories.user_repo import UserRepo
 from app.services.cache_service import CacheService
+
+logger = get_logger(__name__)
 
 
 class AuthService:
@@ -32,17 +35,23 @@ class AuthService:
         api_key = await self.api_key_repo.add(
             ApiKey(project_id=project_id, hashed_key=hashed_key, prefix=prefix, name=name, scopes=scopes)
         )
+        logger.info("api_key_issued", api_key_id=str(api_key.id), project_id=str(project_id), scope_count=len(scopes))
         return api_key, raw_key
 
     async def revoke_api_key(self, api_key: ApiKey) -> None:
         await self.api_key_repo.revoke(api_key)
-        await self.cache.client.delete(f"apikey:{api_key.hashed_key}")
+        await self.cache.delete(f"apikey:{api_key.hashed_key}")
+        logger.info("api_key_revoked", api_key_id=str(api_key.id))
 
     async def verify_api_key(self, raw_key: str) -> ApiKey:
+        """A cache lookup/write failure degrades to `cached_id is None` (see
+        CacheService) -- verification still succeeds via `get_by_hashed_key`, just
+        without the cache short-circuit, so a Valkey outage costs latency, not
+        availability."""
         hashed_key = hash_api_key(raw_key, self.settings.api_key_secret_pepper)
         cache_key = f"apikey:{hashed_key}"
 
-        cached_id = await self.cache.client.get(cache_key)
+        cached_id = await self.cache.get_raw(cache_key)
         if cached_id:
             api_key = await self.api_key_repo.get(uuid.UUID(cached_id))
             if api_key and api_key.is_active:
@@ -50,9 +59,10 @@ class AuthService:
 
         api_key = await self.api_key_repo.get_by_hashed_key(hashed_key)
         if api_key is None:
+            logger.warning("api_key_verification_failed", reason="not_found")
             raise AuthError("Invalid or missing API key")
 
-        await self.cache.client.set(cache_key, str(api_key.id), ex=self.cache.ttl_seconds)
+        await self.cache.set_raw(cache_key, str(api_key.id))
         await self.api_key_repo.touch_last_used(api_key)
         return api_key
 
@@ -76,9 +86,10 @@ class AuthService:
                 user.identity_provider = provider
                 user.external_sub = identity.user_id
                 await self.user_repo.db.flush()
+                logger.info("user_identity_linked", user_id=str(user.id), provider=provider.value)
                 return user
 
-        return await self.user_repo.add(
+        new_user = await self.user_repo.add(
             User(
                 identity_provider=provider,
                 external_sub=identity.user_id,
@@ -86,3 +97,5 @@ class AuthService:
                 role=role,
             )
         )
+        logger.info("user_provisioned", user_id=str(new_user.id), provider=provider.value, role=role.value)
+        return new_user

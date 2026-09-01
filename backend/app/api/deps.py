@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.exceptions import AuthError, ForbiddenError
+from app.core.logging import get_logger
 from app.db.models.api_key import ApiKey
 from app.db.models.enums import UserRole
 from app.db.models.user import User
@@ -54,6 +55,8 @@ from app.services.mcp.session_manager import SessionManager
 from app.services.policy_engine import PolicyEngine
 from app.services.routing.router import GatewayRouter
 
+logger = get_logger(__name__)
+
 __all__ = ["get_db"]
 
 # Viewers may discover tools but not execute them; every other role gets both.
@@ -64,24 +67,28 @@ _FULL_MCP_SCOPES = {"tool:read", "tool:execute"}
 def get_current_principal(request: Request) -> Principal:
     principal = getattr(request.state, "principal", None)
     if principal is None:
+        logger.warning("auth_missing_principal", path=request.url.path)
         raise AuthError("Missing or invalid credentials")
     return principal
 
 
 def get_current_api_key(principal: Principal = Depends(get_current_principal)) -> ApiKey:
     if principal.kind != "api_key" or principal.api_key is None:
+        logger.warning("auth_wrong_principal_kind", expected="api_key", actual=principal.kind)
         raise AuthError("This endpoint requires an API key, not a user session")
     return principal.api_key
 
 
 def get_current_user(principal: Principal = Depends(get_current_principal)) -> User:
     if principal.kind != "user" or principal.user is None:
+        logger.warning("auth_wrong_principal_kind", expected="user", actual=principal.kind)
         raise AuthError("This endpoint requires an Identity-Provider-authenticated user session")
     return principal.user
 
 
 def get_current_identity(principal: Principal = Depends(get_current_principal)) -> UserIdentity:
     if principal.kind != "user" or principal.identity is None:
+        logger.warning("auth_wrong_principal_kind", expected="user_identity", actual=principal.kind)
         raise AuthError("This endpoint requires an Identity-Provider-authenticated user session")
     return principal.identity
 
@@ -108,6 +115,7 @@ def mcp_scopes_for(principal: Principal) -> set[str]:
 def require_mcp_scope(scope: str) -> Callable[[Principal], Principal]:
     def _dependency(principal: Principal = Depends(get_current_principal)) -> Principal:
         if scope not in mcp_scopes_for(principal):
+            logger.warning("mcp_scope_denied", scope=scope, principal_kind=principal.kind)
             raise ForbiddenError(f"Missing required MCP scope '{scope}'")
         return principal
 

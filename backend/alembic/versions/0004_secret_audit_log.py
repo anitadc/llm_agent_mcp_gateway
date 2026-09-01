@@ -20,6 +20,19 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    op.create_table('secrets',
+        sa.Column('id', sa.UUID(), nullable=False),
+        sa.Column('tenant', sa.String(), nullable=False),
+        sa.Column('secret_name', sa.String(), nullable=False),
+        sa.Column('encrypted_value', sa.Text(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.PrimaryKeyConstraint('id'),
+        sa.UniqueConstraint('tenant', 'secret_name', name='uq_secrets_tenant_secret_name')
+        )
+    op.create_index("ix_secrets_created_at", "secrets", ["created_at"])
+    op.create_index("ix_secrets_secret_name", "secrets", ["secret_name"])
+
     op.create_table(
         "secret_audit_log",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
@@ -44,6 +57,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_secrets_secret_name", table_name="secrets")
+    op.drop_index("ix_secretscreated_at", table_name="secrets")
+    op.drop_table('secrets')
+
     op.drop_index("ix_secret_audit_log_secret_name", table_name="secret_audit_log")
     op.drop_index("ix_secret_audit_log_created_at", table_name="secret_audit_log")
     op.drop_table("secret_audit_log")

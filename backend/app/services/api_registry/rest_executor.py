@@ -8,12 +8,15 @@ import redis.asyncio as redis
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.core.exceptions import BadRequestError, ProviderError
+from app.core.logging import get_logger
 from app.db.models.api_endpoint import ApiEndpoint
 from app.db.models.api_service import ApiService
 from app.db.models.enums import RestAuthType, RestHttpMethod
 from app.db.valkey import valkey_client
 from app.secrets.service import SecretService
 from app.services.api_registry.schema_converter import rest_response_to_mcp_content
+
+logger = get_logger(__name__)
 
 _DEFAULT_MAX_ATTEMPTS = 2
 _DEFAULT_BACKOFF_MULTIPLIER = 0.2
@@ -67,14 +70,27 @@ class RestExecutor:
 
         try:
             response = await self._send(service, endpoint.method, url, request_kwargs)
-        except Exception as exc:
+        except httpx.HTTPError as exc:
             # Broad on purpose, matching services/mcp/mcp_client.py's convention:
             # a GET's exhausted tenacity retries surface as tenacity.RetryError,
             # not the original httpx.TransportError, so narrowing this to
             # TransportError would miss that case.
+            
+            logger.exception(
+                "rest_tool_call_failed",
+                service_name=service.name,
+                tool_name=endpoint.tool_name,
+            )
             raise ProviderError(f"REST API '{service.name}' call to '{endpoint.tool_name}' failed: {exc}") from exc
 
         content = rest_response_to_mcp_content(self._parse_body(response))
+        logger.info(
+            "rest_tool_executed",
+            service_name=service.name,
+            tool_name=endpoint.tool_name,
+            status_code=response.status_code,
+            is_error=response.status_code >= 400,
+        )
         return RestExecutionResult(
             content=content, status_code=response.status_code, is_error=response.status_code >= 400
         )
@@ -103,6 +119,9 @@ class RestExecutor:
                 retry=retry_if_exception_type(httpx.TransportError),
                 stop=stop_after_attempt(max_attempts),
                 wait=wait_exponential(multiplier=multiplier, max=backoff_max),
+                # without this, an exhausted retry raises tenacity.RetryError instead of the
+                # underlying httpx exception, which the `except httpx.HTTPError` above would miss.
+                reraise=True,
             )
             async def _get() -> httpx.Response:
                 return await client.get(url, **request_kwargs)
@@ -194,11 +213,13 @@ class RestExecutor:
                 response = await client.post(token_url, data=form)
             response.raise_for_status()
         except httpx.HTTPError as exc:
+            logger.exception("oauth2_token_exchange_failed", service_name=service.name)
             raise ProviderError(f"OAuth2 client-credentials exchange for '{service.name}' failed: {exc}") from exc
 
         payload = response.json()
         access_token = payload.get("access_token")
         if not access_token:
+            logger.warning("oauth2_token_exchange_missing_access_token", service_name=service.name)
             raise ProviderError(f"OAuth2 client-credentials exchange for '{service.name}' returned no access_token")
 
         ttl = max(int(payload.get("expires_in", _OAUTH2_TOKEN_CACHE_TTL_FALLBACK_SECONDS)) - _OAUTH2_TOKEN_EXPIRY_SAFETY_MARGIN_SECONDS, 30)

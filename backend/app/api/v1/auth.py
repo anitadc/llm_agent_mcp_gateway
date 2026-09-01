@@ -6,15 +6,21 @@ from app.db.models.user import User
 from app.identity.models import UserIdentity
 from app.schemas.auth import SessionInfo
 
-router = APIRouter(prefix="/v1/auth", tags=["auth"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
 
 @router.post("/token/exchange", response_model=SessionInfo)
 async def exchange_token(
     user: User = Depends(get_current_user), identity: UserIdentity = Depends(get_current_identity)
 ) -> SessionInfo:
-    logger.info("exchanging identity token", user_id=user.id, identity_provider=identity.provider)
+    logger.info(
+        "session_exchanged",
+        user_id=str(user.id),
+        provider=identity.provider,
+        tenant_id=identity.tenant_id,
+    )
     return SessionInfo(
         user_id=user.id,
         email=user.email,

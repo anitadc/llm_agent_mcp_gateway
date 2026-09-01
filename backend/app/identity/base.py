@@ -60,6 +60,7 @@ def validate_oidc_jwt(token: str, *, jwks_url: str, issuer: str | None, audience
 
         logger.warning(
             "Token validation failed: no matching signing key",
+            issuer=issuer,
             jwks_url=jwks_url,
             token_kid=token_kid,
             jwks_kids=jwks_keys,
@@ -106,6 +107,12 @@ class IdentityProvider(ABC):
         user_info = await self.get_user_info(token)
         roles = await self.get_roles(token)
         groups = await self.get_groups(token)
+        logger.info(
+            "identity_resolved",
+            provider=self.name,
+            user_id=user_info["user_id"],
+            tenant_id=user_info.get("tenant_id"),
+        )
         return UserIdentity(
             user_id=user_info["user_id"],
             email=user_info.get("email"),

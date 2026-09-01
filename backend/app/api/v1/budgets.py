@@ -13,8 +13,9 @@ from app.repositories.budget_repo import BudgetRepo
 from app.repositories.cost_ledger_repo import CostLedgerRepo
 from app.schemas.budget import BudgetCreate, BudgetOut, BudgetUpdate
 
-router = APIRouter(prefix="/v1/budgets", tags=["budgets"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/v1/budgets", tags=["budgets"])
 
 
 def _period_start(period: BudgetPeriod) -> datetime:
@@ -77,6 +78,7 @@ async def create_budget(
             alert_threshold_pct=body.alert_threshold_pct,
         )
     )
+    logger.info("budget_created", budget_id=str(budget.id), period=budget.period.value)
     return await _to_out(budget, cost_ledger_repo)
 
 
@@ -100,6 +102,7 @@ async def update_budget(
         budget.alert_threshold_pct = body.alert_threshold_pct
     await repo.db.flush()
     await repo.db.refresh(budget)
+    logger.info("budget_updated", budget_id=str(budget_id))
     return await _to_out(budget, cost_ledger_repo)
 
 
@@ -114,3 +117,4 @@ async def delete_budget(
     if budget is None:
         raise NotFoundError("Budget not found")
     await repo.delete(budget)
+    logger.info("budget_deleted", budget_id=str(budget_id))

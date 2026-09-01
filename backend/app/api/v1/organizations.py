@@ -11,8 +11,9 @@ from app.db.models.user import User
 from app.repositories.organization_repo import OrganizationRepo
 from app.schemas.organization import OrganizationCreate, OrganizationOut, OrganizationUpdate
 
-router = APIRouter(prefix="/v1/organizations", tags=["organizations"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/v1/organizations", tags=["organizations"])
 
 
 @router.get("", response_model=list[OrganizationOut])
@@ -32,6 +33,7 @@ async def create_organization(
 ) -> OrganizationOut:
     logger.info("creating organization", user_id=user.id, name=body.name)
     org = await repo.add(Organization(name=body.name))
+    logger.info("organization_created", organization_id=str(org.id))
     return OrganizationOut.model_validate(org)
 
 
@@ -49,4 +51,5 @@ async def update_organization(
     org.name = body.name
     await repo.db.flush()
     await repo.db.refresh(org)
+    logger.info("organization_updated", organization_id=str(organization_id))
     return OrganizationOut.model_validate(org)

@@ -2,7 +2,10 @@ import asyncio
 
 from app.core.config import Settings
 from app.core.exceptions import ProviderError
+from app.core.logging import get_logger
 from app.secrets.base import SecretProvider
+
+logger = get_logger(__name__)
 
 
 class VaultProvider(SecretProvider):
@@ -34,11 +37,14 @@ class VaultProvider(SecretProvider):
             )
         except hvac.exceptions.InvalidPath:
             return None
-        except Exception as exc:
+        except hvac.exceptions.VaultError as exc:
+            logger.exception("vault_get_failed", secret_name=secret_name, tenant=tenant)
             raise ProviderError(f"Vault get_secret failed: {exc}") from exc
         return response["data"]["data"].get("value")
 
     async def set_secret(self, secret_name: str, value: str, tenant: str | None = None) -> None:
+        import hvac.exceptions
+
         try:
             await asyncio.to_thread(
                 self._client.secrets.kv.v2.create_or_update_secret,
@@ -46,7 +52,8 @@ class VaultProvider(SecretProvider):
                 secret={"value": value},
                 mount_point=self._mount_point,
             )
-        except Exception as exc:
+        except hvac.exceptions.VaultError as exc:
+            logger.exception("vault_set_failed", secret_name=secret_name, tenant=tenant)
             raise ProviderError(f"Vault set_secret failed: {exc}") from exc
 
     async def delete_secret(self, secret_name: str, tenant: str | None = None) -> None:
@@ -60,5 +67,6 @@ class VaultProvider(SecretProvider):
             )
         except hvac.exceptions.InvalidPath:
             pass
-        except Exception as exc:
+        except hvac.exceptions.VaultError as exc:
+            logger.exception("vault_delete_failed", secret_name=secret_name, tenant=tenant)
             raise ProviderError(f"Vault delete_secret failed: {exc}") from exc

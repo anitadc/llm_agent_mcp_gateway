@@ -21,7 +21,7 @@ flowchart TB
     end
 
     IdP["Identity Provider\n(Keycloak / Entra / Auth0 / Okta / AWS ISC / Google)"]
-    Secrets["Secret Backend\n(Infisical / AWS / Azure / GCP / Vault)"]
+    Secrets["Secret Backend\n(Postgres / Infisical / AWS / Azure / GCP / Vault)"]
     LLM["LLM Providers\n(OpenAI / Anthropic / Bedrock)"]
     MCP["MCP Tool Servers"]
     RestApis["Enterprise REST APIs\n(registered in the API Registry)"]
@@ -134,7 +134,7 @@ See Section 14 (Configuration Management) for the full docker-compose service ta
 | **MCP Gateway** | Governed access to MCP tool servers | `api/v1/mcp_gateway.py`, `api/v1/mcp_servers.py`, `api/v1/mcp_tools.py`, `api/v1/mcp_sessions.py`, `services/mcp/{discovery_service, health_checker, mcp_client, routing_engine, session_manager}` | httpx, Postgres, Secret Provider layer (server outbound auth reads a named env var, not the Secret Provider abstraction — see §6) |
 | **API Registry** | Exposes enterprise REST APIs as MCP tools, dispatched through the same `POST /mcp` `tools/call` as MCP-server tools | `api/v1/api_services.py`, `services/api_registry/{schema_converter, rest_executor, api_registry_service}` | httpx, tenacity, Postgres, Secret Provider layer, Valkey (OAuth2 token cache) — see §6 |
 | **Identity Layer** | Provider-agnostic authentication | `identity/{base, models, factory, keycloak_provider, entra_provider, auth0_provider, okta_provider, aws_identity_provider, google_identity_provider}` | PyJWT (`jwt.PyJWKClient`), each provider's JWKS endpoint |
-| **Secret Management Layer** | Provider-agnostic credential resolution | `secrets/{base, factory, service, infisical_provider, aws_provider, azure_provider, gcp_provider, vault_provider}` | Infisical SDK / boto3 / azure-keyvault / google-cloud-secret-manager / hvac (per backend), Valkey (cache) |
+| **Secret Management Layer** | Provider-agnostic credential resolution | `secrets/{base, factory, service, postgres_provider, infisical_provider, aws_provider, azure_provider, gcp_provider, vault_provider}` | cryptography (Fernet) / boto3 / azure-keyvault / google-cloud-secret-manager / hvac (per backend), Postgres, Valkey (cache) |
 | **Policy & Governance Layer** | RBAC/ABAC evaluation, rate limiting, RBAC role checks | `services/policy_engine.py`, `services/rbac_service.py`, `services/rate_limit_service.py`, `middleware/rate_limit_middleware.py` | Postgres (`access_policies`), Valkey (rate counters) |
 | **Admin UI** | Human-facing control surface | `frontend/src/pages/*`, `frontend/src/services/{api.js, authService.js}` | keycloak-js, axios, recharts |
 
@@ -503,6 +503,7 @@ Authorization (RBAC role on User row; PolicyEngine for MCP tools/call)
 
 | Backend | Module | Notes |
 |---|---|---|
+| Postgres (default) | `postgres_provider.py` | Fernet-encrypted at rest via `SECRET_STORAGE_ENCRYPTION_KEY` |
 | Infisical (default) | `infisical_provider.py` | Universal Auth |
 | AWS Secrets Manager | `aws_provider.py` | |
 | Azure Key Vault | `azure_provider.py` | |
@@ -653,10 +654,10 @@ All runtime configuration is a single Pydantic `Settings` class (`core/config.py
 | Identity | `identity_provider` (default `keycloak`), `keycloak_base_url/realm/client_id/jwks_url/audience`, plus per-provider optional fields for Entra, Auth0, Okta, AWS IAM Identity Center, Google |
 | Guardrails | `guardrails_base_url`, `guardrails_timeout_seconds=5.0` |
 | Security | `api_key_prefix="gw"`, `api_key_secret_pepper` (required) |
-| Secrets | `secret_provider` (default `infisical`), `secret_cache_ttl_seconds=300`, plus per-backend fields for Infisical, AWS, GCP, Azure, Vault |
+| Secrets | `secret_provider` (default `postgres`), `secret_cache_ttl_seconds=300`, `secret_storage_encryption_key` (Postgres backend), plus per-backend fields for AWS, GCP, Azure, Vault |
 | MCP | `mcp_protocol_version="2025-06-18"`, `mcp_client_timeout_seconds=10.0`, `mcp_discovery_refresh_seconds=300`, `mcp_health_check_interval_seconds=30`, `mcp_default_rate_limit_per_window=60` |
 
-**Deployment surfaces**: `backend/.env.example` documents the app/DB/cache/Keycloak/guardrails/provider/security/MCP groups; the Identity-Provider (Entra/Auth0/Okta/AWS/Google) and Secret-Provider (Infisical/AWS/Azure/GCP/Vault) variable groups are documented in `docs/identity-provider-architecture.md` and `docs/secret-management.md` respectively rather than in `.env.example` itself. `frontend/.env.example` covers `VITE_API_BASE`, `VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM`, `VITE_KEYCLOAK_CLIENT_ID`. `docker-compose.yml` passes every backend `Settings` field through as an environment variable with a `${VAR:-default}` fallback.
+**Deployment surfaces**: `backend/.env.example` documents the app/DB/cache/Keycloak/guardrails/provider/security/MCP groups; the Identity-Provider (Entra/Auth0/Okta/AWS/Google) and Secret-Provider (Postgres/Infisical/AWS/Azure/GCP/Vault) variable groups are documented in `docs/identity-provider-architecture.md` and `docs/secret-management.md` respectively rather than in `.env.example` itself. `frontend/.env.example` covers `VITE_API_BASE`, `VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM`, `VITE_KEYCLOAK_CLIENT_ID`. `docker-compose.yml` passes every backend `Settings` field through as an environment variable with a `${VAR:-default}` fallback.
 
 ---
 

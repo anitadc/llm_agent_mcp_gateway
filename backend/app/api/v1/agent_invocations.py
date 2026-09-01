@@ -15,8 +15,9 @@ from app.services.logging_service import record_agent_invocation
 from app.services.policy_engine import PolicyEngine
 from app.services.rate_limit_service import RateLimitService
 
-router = APIRouter(prefix="/v1/agent-invocations", tags=["agent_gateway"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/v1/agent-invocations", tags=["agent_gateway"])
 
 
 def _identity(principal: Principal) -> tuple[uuid.UUID | None, uuid.UUID | None, uuid.UUID | None]:
@@ -48,6 +49,7 @@ async def invoke_agent(
 
     if principal.kind == "api_key":
         if "agent:invoke" not in (principal.api_key.scopes or []):
+            logger.warning("agent_invocation_forbidden", request_id=str(request_id), capability=body.capability)
             raise ForbiddenError("Missing required scope 'agent:invoke'")
         roles: list[str] = []
         identity_provider = None
@@ -82,13 +84,14 @@ async def invoke_agent(
     )
 
     logger.info(
-        "agent invocation completed",
-        request_id=request_id,
-        status=result.status.value,
+        "agent_invocation_completed",
+        request_id=str(request_id),
         target_agent_key=result.agent.agent_key if result.agent else None,
+        status=result.status.value,
         authorization_decision=result.authorization_decision,
         latency_ms=int((time.perf_counter() - start) * 1000),
     )
+
     return InvokeResponse(
         invocation_id=request_id,
         status=result.status.value,

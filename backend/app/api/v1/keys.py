@@ -15,8 +15,9 @@ from app.schemas.api_key import ApiKeyCreate, ApiKeyOut
 from app.services.auth_service import AuthService
 from app.services.cache_service import CacheService
 
-router = APIRouter(prefix="/v1/keys", tags=["keys"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/v1/keys", tags=["keys"])
 
 
 @router.get("", response_model=list[ApiKeyOut])
@@ -38,6 +39,7 @@ async def create_key(
     logger.info("issuing API key", user_id=user.id, project_id=str(body.project_id), name=body.name, scopes=body.scopes)
     auth_service = AuthService(repo, UserRepo(repo.db), CacheService(valkey_client), settings)
     api_key, raw_key = await auth_service.issue_api_key(body.name, body.project_id, body.scopes)
+    logger.info("api_key_created", api_key_id=str(api_key.id), project_id=str(body.project_id))
     out = ApiKeyOut.model_validate(api_key)
     out.raw_key = raw_key
     return out
@@ -56,3 +58,4 @@ async def revoke_key(
         raise NotFoundError("API key not found")
     auth_service = AuthService(repo, UserRepo(repo.db), CacheService(valkey_client), settings)
     await auth_service.revoke_api_key(api_key)
+    logger.info("api_key_revoked", api_key_id=str(key_id))

@@ -63,10 +63,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     request.state.principal = Principal(kind="user", user=user, identity=identity)
                 await session.commit()
             except GatewayException as exc:
-                logger.warning("auth gateway exception", path=request.url.path, code=exc.code, message=exc.message)
+                logger.warning("auth_failed", path=request.url.path, code=exc.code, message=exc.message)
                 return _error_response(request, exc)
-            except Exception:
-                logger.exception("Unexpected auth failure", path=request.url.path)
+            except Exception as exc:
+                logger.exception("auth_failed_unexpected", path=request.url.path, error_type=type(exc).__name__)
                 return _error_response(request, AuthError("Invalid or expired credentials"))
 
         return await call_next(request)

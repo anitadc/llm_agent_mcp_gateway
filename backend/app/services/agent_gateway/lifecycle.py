@@ -13,7 +13,10 @@ not removed from the schema -- but no code path assigns them today.
 """
 
 from app.core.exceptions import BadRequestError
+from app.core.logging import get_logger
 from app.db.models.enums import AgentLifecycleStatus
+
+logger = get_logger(__name__)
 
 ALLOWED_TRANSITIONS: dict[AgentLifecycleStatus, set[AgentLifecycleStatus]] = {
     AgentLifecycleStatus.draft: {AgentLifecycleStatus.under_review},
@@ -28,4 +31,5 @@ ALLOWED_TRANSITIONS: dict[AgentLifecycleStatus, set[AgentLifecycleStatus]] = {
 
 def require_transition(current: AgentLifecycleStatus, target: AgentLifecycleStatus) -> None:
     if target not in ALLOWED_TRANSITIONS.get(current, set()):
+        logger.warning("agent_lifecycle_transition_denied", current_status=current.value, target_status=target.value)
         raise BadRequestError(f"Cannot transition agent from '{current.value}' to '{target.value}'")

@@ -2,7 +2,10 @@ import asyncio
 
 from app.core.config import Settings
 from app.core.exceptions import ProviderError
+from app.core.logging import get_logger
 from app.secrets.base import SecretProvider
+
+logger = get_logger(__name__)
 
 
 class AzureKeyVaultProvider(SecretProvider):
@@ -28,30 +31,35 @@ class AzureKeyVaultProvider(SecretProvider):
         return self._normalize(combined)
 
     async def get_secret(self, secret_name: str, tenant: str | None = None) -> str | None:
-        from azure.core.exceptions import ResourceNotFoundError
+        from azure.core.exceptions import AzureError, ResourceNotFoundError
 
         try:
             result = await asyncio.to_thread(self._client.get_secret, self._secret_name(secret_name, tenant))
         except ResourceNotFoundError:
             return None
-        except Exception as exc:
+        except AzureError as exc:
+            logger.exception("azure_keyvault_get_failed", secret_name=secret_name, tenant=tenant)
             raise ProviderError(f"Azure Key Vault get_secret failed: {exc}") from exc
         return result.value
 
     async def set_secret(self, secret_name: str, value: str, tenant: str | None = None) -> None:
+        from azure.core.exceptions import AzureError
+
         try:
             # set_secret is an upsert in Key Vault -- no separate create/update path needed.
             await asyncio.to_thread(self._client.set_secret, self._secret_name(secret_name, tenant), value)
-        except Exception as exc:
+        except AzureError as exc:
+            logger.exception("azure_keyvault_set_failed", secret_name=secret_name, tenant=tenant)
             raise ProviderError(f"Azure Key Vault set_secret failed: {exc}") from exc
 
     async def delete_secret(self, secret_name: str, tenant: str | None = None) -> None:
-        from azure.core.exceptions import ResourceNotFoundError
+        from azure.core.exceptions import AzureError, ResourceNotFoundError
 
         try:
             poller = await asyncio.to_thread(self._client.begin_delete_secret, self._secret_name(secret_name, tenant))
             await asyncio.to_thread(poller.result)
         except ResourceNotFoundError:
             pass
-        except Exception as exc:
+        except AzureError as exc:
+            logger.exception("azure_keyvault_delete_failed", secret_name=secret_name, tenant=tenant)
             raise ProviderError(f"Azure Key Vault delete_secret failed: {exc}") from exc

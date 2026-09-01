@@ -11,8 +11,9 @@ from app.db.models.user import User
 from app.repositories.model_pricing_repo import ModelPricingRepo
 from app.schemas.model_pricing import ModelPricingCreate, ModelPricingOut, ModelPricingUpdate
 
-router = APIRouter(prefix="/v1/model-pricing", tags=["model_pricing"])
 logger = get_logger(__name__)
+
+router = APIRouter(prefix="/v1/model-pricing", tags=["model_pricing"])
 
 
 @router.get("", response_model=list[ModelPricingOut])
@@ -39,6 +40,7 @@ async def create_model_pricing(
             completion_per_1k=body.completion_per_1k,
         )
     )
+    logger.info("model_pricing_created", pricing_id=str(entry.id), provider=entry.provider, model=entry.model)
     return ModelPricingOut.model_validate(entry)
 
 
@@ -59,6 +61,7 @@ async def update_model_pricing(
         entry.completion_per_1k = body.completion_per_1k
     await repo.db.flush()
     await repo.db.refresh(entry)
+    logger.info("model_pricing_updated", pricing_id=str(pricing_id))
     return ModelPricingOut.model_validate(entry)
 
 
@@ -73,3 +76,4 @@ async def delete_model_pricing(
     if entry is None:
         raise NotFoundError("Pricing entry not found")
     await repo.delete(entry)
+    logger.info("model_pricing_deleted", pricing_id=str(pricing_id))

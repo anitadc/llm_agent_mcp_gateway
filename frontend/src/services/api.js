@@ -102,6 +102,7 @@ export const endpoints = {
 
   getSecretProviders: () => api.get("/admin/secrets/providers"),
   getSecretStatus: () => api.get("/admin/secrets/status"),
+  setSecret: (data) => api.post("/admin/secrets", data),
   rotateSecret: (data) => api.post("/admin/secrets/rotate", data),
   getSecretAuditLog: (params) => api.get("/admin/secrets/audit-log", { params }),
 
