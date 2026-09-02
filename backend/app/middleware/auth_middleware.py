@@ -84,6 +84,19 @@ class AuthMiddleware(BaseHTTPMiddleware):
             tenant_config = await TenantIdentityConfigRepo(session).get_by_issuer(issuer)
             if tenant_config is not None:
                 return build_provider_from_tenant_config(tenant_config.provider.value, tenant_config.configuration, settings)
+        # No tenant matched. If there's no global provider configured,
+        # allow a local HS256-signed token flow when explicitly enabled for
+        # development/testing via settings.allow_local_token_issue and
+        # settings.jwt_secret.
+        if settings.identity_provider is None:
+            if getattr(settings, "allow_local_token_issue", False):
+                if not getattr(settings, "jwt_secret", None):
+                    raise AuthError("Local token issuance enabled but jwt_secret is not configured")
+                # Lazily import the local provider implementation.
+                from app.identity.local_provider import LocalProvider
+
+                return LocalProvider(settings)
+            raise AuthError("This deployment has no configured identity provider")
         return get_identity_provider(settings)
 
 

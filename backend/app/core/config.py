@@ -25,8 +25,21 @@ class Settings(BaseSettings):
     # today's validation is JWKS-only and doesn't need them -- and are resolved
     # via the Secret Provider layer (`{PROVIDER}_CLIENT_SECRET`), never a plain
     # env var here, mirroring every other credential in this app. See
-    # docs/identity-provider-architecture.md.
-    identity_provider: Literal["keycloak", "entra", "auth0", "okta", "aws_identity", "google"] = "keycloak"
+    # docs/identity-provider-architecture.md. Set to None to disable the global
+    # identity provider entirely for deployments that use only API keys or
+    # per-tenant identity configuration.
+    identity_provider: Literal["keycloak", "entra", "auth0", "okta", "aws_identity", "google"] | None = None
+
+    @field_validator("identity_provider", mode="before")
+    @classmethod
+    def normalize_identity_provider(cls, value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"", "none", "null"}:
+                return None
+        return value
 
     keycloak_base_url: str
     keycloak_realm: str
@@ -73,6 +86,13 @@ class Settings(BaseSettings):
     api_key_prefix: str = "gw"
     api_key_secret_pepper: str
 
+    # Local dev/testing JWT signing key and toggle. When `identity_provider` is
+    # intentionally disabled (None) it's convenient to issue signed JWTs from
+    # the gateway itself for local frontends/tests. `jwt_secret` signs tokens
+    # with HS256; keep this empty in production. `allow_local_token_issue`
+    # must be explicitly enabled to expose the token-issuing endpoint.
+    jwt_secret: str | None = "sfghafsgfdasg"
+    allow_local_token_issue: bool = True
     # --- Secret Provider layer (app/secrets/) ---
     # Accept an explicitly empty value from Compose/environment when no backend is
     # configured for this deployment. "unset" is a valid state for local/dev stacks

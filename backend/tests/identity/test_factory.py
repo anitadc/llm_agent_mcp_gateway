@@ -53,6 +53,10 @@ def test_factory_accepts_none_as_an_explicitly_disabled_provider() -> None:
     assert settings.identity_provider is None
     with pytest.raises(ValueError, match="IDENTITY_PROVIDER.*configured"):
         get_identity_provider(settings)
+def test_factory_falls_back_to_the_first_configured_provider_when_identity_provider_is_blank() -> None:
+    settings = _settings(identity_provider=None)
+    assert settings.identity_provider is None
+    assert isinstance(get_identity_provider(settings), KeycloakProvider)
 
 
 def test_factory_rejects_an_unknown_provider() -> None:

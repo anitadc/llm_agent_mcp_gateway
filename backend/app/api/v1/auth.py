@@ -5,10 +5,26 @@ from app.core.logging import get_logger
 from app.db.models.user import User
 from app.identity.models import UserIdentity
 from app.schemas.auth import SessionInfo
+from app.schemas.auth import LocalTokenRequest, LocalTokenResponse
+from app.core.config import get_settings
+from app.identity.local_token import issue_local_jwt
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
+
+
+@router.get("/provider")
+async def get_provider_info(settings=Depends(get_settings)) -> dict:
+    """Public info about which identity provider the backend is configured to use.
+
+    This is intentionally non-sensitive and helps frontends adapt their
+    login flow (Keycloak redirect vs. a dev local token form).
+    """
+    return {
+        "identity_provider": settings.identity_provider,
+        "allow_local_token_issue": bool(getattr(settings, "allow_local_token_issue", False)),
+    }
 
 
 @router.post("/token/exchange", response_model=SessionInfo)
@@ -32,3 +48,29 @@ async def exchange_token(
         groups=identity.groups,
         attributes=identity.attributes,
     )
+
+
+
+@router.post("/local/issue", response_model=LocalTokenResponse)
+async def issue_local_token(body: LocalTokenRequest, settings=Depends(get_settings)) -> LocalTokenResponse:
+    """Dev-only: issues a locally-signed JWT when no external IdP is configured.
+
+    This endpoint is intentionally gated: `settings.identity_provider` must be
+    None and `settings.allow_local_token_issue` must be True. It is intended
+    for local development and tests only.
+    """
+    if settings.identity_provider is not None or not settings.allow_local_token_issue:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=403, detail="Local token issuance is disabled")
+
+    token, expires = issue_local_jwt(
+        settings,
+        user_id=body.user_id,
+        email=body.email,
+        roles=body.roles,
+        groups=body.groups,
+        tenant_id=body.tenant_id,
+        expires_seconds=body.expires_seconds,
+    )
+    return LocalTokenResponse(token=token, expires_in=expires)

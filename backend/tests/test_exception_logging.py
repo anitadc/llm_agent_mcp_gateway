@@ -86,6 +86,22 @@ async def test_readiness_skips_unconfigured_infisical_provider(monkeypatch) -> N
 
 
 @pytest.mark.asyncio
+async def test_auth_middleware_rejects_unconfigured_global_identity_provider() -> None:
+    request = type("Request", (), {"url": type("Url", (), {"path": "/api/test"})(), "headers": {"authorization": "Bearer token"}, "state": type("State", (), {})()})()
+    middleware = AuthMiddleware(app=None)
+
+    async def fake_resolve_provider(*args, **kwargs):
+        raise AuthError("This deployment has no configured identity provider")
+
+    middleware._resolve_provider = fake_resolve_provider
+
+    response = await middleware.dispatch(request, lambda req: None)
+
+    assert response.status_code == 401
+    assert response.body
+
+
+@pytest.mark.asyncio
 async def test_auth_middleware_logs_unexpected_exception(monkeypatch) -> None:
     calls: list[tuple[str, dict]] = []
 

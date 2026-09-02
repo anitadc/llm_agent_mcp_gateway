@@ -110,7 +110,7 @@ services:
       # default and remains fully configured for local dev out of the box;
       # switch IDENTITY_PROVIDER + the matching block below to run against an
       # enterprise IdP instead. See docs/identity-provider-architecture.md.
-      IDENTITY_PROVIDER: ${IDENTITY_PROVIDER:-keycloak}
+      IDENTITY_PROVIDER: ${IDENTITY_PROVIDER:-None}
       ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:-}
       ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:-}
       AUTH0_DOMAIN: ${AUTH0_DOMAIN:-}
