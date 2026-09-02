@@ -130,6 +130,52 @@ curl -X POST http://localhost:8010/admin/identity/access-policies \
 
 ---
 
+### How do Multi-Tenant Identity Configs and Access Policies (RBAC/ABAC) relate, and how do I set up a full RBAC/ABAC policy?
+
+They're two **independent** features that happen to live on the same Identity Providers
+page — not one nested inside the other:
+
+- **Multi-Tenant Identity Configs** decide *which IdentityProvider validates a token*
+  (per tenant, by issuer).
+- **Access Policies (RBAC/ABAC)** decide *what an already-authenticated caller is
+  allowed to do* (which MCP tool/agent).
+
+**The connection point**: every Access Policy has an `allowed_identity_providers`
+field, and `PolicyEngine` checks it against `principal.identity.provider` — the same
+provider-name string (`"entra"`, `"keycloak"`, etc.) that a Multi-Tenant Identity Config
+maps a tenant's issuer to. So once a tenant is set up to authenticate via, say, Entra,
+you can write an Access Policy that applies *specifically to Entra-authenticated
+callers*, independent of their role.
+
+**Worked example** — "Customer A (authenticated via their own Entra tenant) may only
+call the `read_only_report` tool, regardless of their role":
+
+1. **Multi-Tenant Identity Configs** → Add tenant config: `tenant_id=customer-a`,
+   `provider=Microsoft Entra ID`, `issuer=https://login.microsoftonline.com/{their-tenant-guid}/v2.0`,
+   `configuration={"entra_tenant_id":"...","entra_client_id":"..."}` (see the entry
+   above for details).
+2. **Access Policies** → since the UI form doesn't expose `allowed_tool_names`, create
+   it via the API:
+   ```bash
+   curl -X POST http://localhost:8010/admin/identity/access-policies \
+     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+     -d '{"name":"customer-a-readonly","allowed_identity_providers":["entra"],"allowed_tool_names":["read_only_report"]}'
+   ```
+
+Now any user whose token validated via Entra is restricted to that one tool, while
+everyone else (Keycloak-authenticated, or any tenant without a matching policy) is
+unaffected — remember, **no active policy for a project means unrestricted**, and it's
+OR-across-policies, so this only *adds* a constraint for Entra callers if no broader
+policy already covers them.
+
+**Where it's enforced (reminder)**: only `mcp_gateway.py`'s `tools/call` and the Agent
+Gateway's `invocation_service.py` call `PolicyEngine.evaluate()` — not plain
+`/v1/chat/completions` or `/v1/embeddings`. It only applies to **human/IdP callers**
+(`principal.kind == "user"`) — API-key callers already carry their own scopes and are
+exempt from this check entirely.
+
+---
+
 ### How do I get an API key to invoke the gateway?
 
 API keys are scoped to a **Project**, which belongs to an **Organization** — create both
@@ -203,6 +249,44 @@ returned session id automatically across calls.
 
 ---
 
+### Request numbers are increasing but cost isn't changing — how does budget/cost tracking work?
+
+`CostService.calculate()` (called from `chat.py`/`embeddings.py` after every completion)
+looks up the **`model_pricing`** table by an *exact* match on `(resolved_provider,
+resolved_model)` — the real provider/model your routing rule resolved to, not the alias
+you sent as `"model"`. It multiplies prompt/completion tokens by that row's
+`prompt_per_1k`/`completion_per_1k`. The result is written to **`cost_ledger`** (one row
+per request, linked to `request_logs`) on *every* request — even the `$0` ones.
+
+**Budgets have no separate running counter** — `GET /v1/budgets` computes
+`current_spend_usd` live, by summing `cost_ledger` rows scoped to that org/project/user
+since the period start. And budgets are **advisory only**: nothing in the request path
+checks a budget or blocks a request for exceeding it.
+
+**Two things independently produce `cost_usd = 0`**, while `request_logs` keeps
+incrementing normally either way:
+
+1. **Cache hits.** Repeating the same `model` + `messages` + `temperature` +
+   `max_tokens` combination serves the cached response from Valkey and is deliberately
+   costed at `$0` (no real provider call happened, so there's nothing to charge for).
+   Check the response's `gateway_metadata.cache_hit` field.
+2. **No `model_pricing` row for that provider/model.** If `model_pricing` has no entry
+   matching the *resolved* provider+model, cost silently returns `$0` (logged as a
+   `model_pricing_not_found` warning). This table isn't seeded by default, so on a fresh
+   deployment it's empty until you add rows yourself.
+
+**Fix for #2** — Model Pricing page, or:
+
+```bash
+curl -X POST http://localhost:8010/v1/model-pricing \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"provider":"openai","model":"gpt-4o-mini","prompt_per_1k":0.00015,"completion_per_1k":0.0006}'
+```
+
+`provider`/`model` here must match your **routing rule's target**, not the alias.
+
+---
+
 ### I called `/v1/chat/completions` and got `"No active routing rule for alias 'X'"` — what do I do?
 
 Create a **Routing Rule** (Routing Rules page) with:
@@ -220,6 +304,41 @@ project/API key. `ProviderNameEnum` only supports `openai`, `anthropic`, `bedroc
 
 ---
 
+### In Routing Rules, there's a "priority" option in the Strategy dropdown, and also a separate Priority number field — how do these work, and what's the difference?
+
+They control two completely different things, despite sharing a name.
+
+**Strategy + target weight — orders the *targets within one rule*** (its fallback
+chain — the UI labels that section "Targets (tried in order)"). `GatewayRouter.
+_order_targets()` sorts them before building the LLM router:
+
+- **`priority`** — sorts by each target's own **weight**, ascending — **lower weight is
+  tried first** (weight `1` beats weight `2`).
+- **`cost`** — sorts by that target's `model_pricing.prompt_per_1k`; a target with no
+  pricing row sorts *last* (treated as maximally expensive).
+- **`latency`** — sorts by the target's recent p50 latency from `request_logs`; a target
+  with no data sorts last.
+
+Whichever order results, that's the sequence litellm's Router tries — first entry
+first, falling back to the next target on failure.
+
+**The top-level Priority number — resolves competing *rules***, not targets. If
+several **active** rules match the same `model_alias` + `capability` (e.g. two global
+rules both for `gpt-4o-mini`/`chat`), `RoutingRuleRepo.find_best_match()` picks exactly
+one:
+
+1. **Specificity wins first** — a rule scoped to project+user beats project-only, which
+   beats a global rule.
+2. **Among rules tied on specificity, the higher Priority number wins.** This is
+   **winner-take-all**, not a fallback chain — the losing rule's targets are never
+   tried at all.
+
+**The gotcha**: these two sort in **opposite directions**. Target weight is ascending
+(lowest number tried first); the rule-level Priority field is descending (highest
+number wins). They share a name but don't behave the same way.
+
+---
+
 ### How do I set an LLM provider's credential (e.g. `OPENAI_API_KEY`)?
 
 Use the **Secret Management** page's "Set a Secret Value" form (or `POST
@@ -230,6 +349,72 @@ Recognized names: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `AWS_ACCESS_KEY_ID` +
 `AWS_SECRET_ACCESS_KEY` (Bedrock). Note: LLM provider credentials are **never** read
 from `.env`/environment variables, by design — only from the Secret Provider,
 regardless of restart or redeploy.
+
+---
+
+### There's a "Rotate" button next to every secret on the Secrets page — how does it work, and where is it used?
+
+It does **not** generate or let you type a new value — it forces a fresh read from the
+underlying Secret Provider, bypassing the cache, and re-caches whatever it finds:
+
+```python
+# app/secrets/service.py — SecretService.get_secret(..., force_refresh=True)
+value = await self.provider.get_secret(secret_name, tenant=tenant)   # skips the cache check
+await self._cache_write(cache_key, value)                            # re-caches it
+```
+
+Clicking it loops over every secret name that LLM provider actually needs (e.g. AWS
+Bedrock rotates *two* — `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` — in sequence),
+calling `POST /admin/secrets/rotate` (`{"secret_name": ..., "tenant": ...}`) once per
+name. Each call is audit-logged (`operation: rotate`, success/error) into
+`secret_audit_log`, visible in the "Recent Secret Operations" table below.
+
+**What it's for**: resolved secret values are cached in Valkey for
+`secret_cache_ttl_seconds` (default 300s) so the hot LLM-routing path doesn't hit the
+Secret Provider on every request. Rotate exists to bust that cache when a credential's
+real value changed **outside this app** — e.g. you rotated the actual key in the AWS
+Secrets Manager console, or updated it directly in Vault — so the gateway doesn't keep
+serving the old cached value for up to 5 minutes.
+
+**It's not needed after using "Set a Secret Value"** — that form's `set_secret` already
+invalidates the cache entry as its last step, so the very next request re-fetches the
+fresh value automatically. Rotate only matters when the write happened somewhere
+`SecretService` doesn't already know about.
+
+---
+
+### There's a "Recent Secret Operations" table on the Secrets page — why are these records being inserted, and what's the purpose?
+
+Each row is a fire-and-forget audit record written by `record_secret_audit()`
+(`app/services/logging_service.py`), which runs as a background task after the response
+is already sent — it never blocks or slows down the actual secret operation. Its
+signature deliberately has **no `value` parameter at all**: nothing that could hold a
+secret value ever reaches this function, let alone gets written to the row. Each row
+only records:
+
+- **who** (`user_id`)
+- **what operation** (`get` / `set` / `rotate` / `delete`)
+- **which secret, by name only** (`secret_name` — never its value)
+- **against which provider/tenant** (`provider`, `tenant_id`)
+- **whether it succeeded** (`status`: success/error)
+
+**What actually triggers a row** — three endpoints in `app/api/v1/secrets.py` write one:
+
+1. **Just loading/refreshing the Secrets page** — `GET /admin/secrets/status` runs a
+   `get` check for every recognized LLM credential name (`OPENAI_API_KEY`,
+   `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, both `AWS_ACCESS_KEY_ID`/
+   `AWS_SECRET_ACCESS_KEY`, `AZURE_OPENAI_KEY` — 6 checks across 5 providers) and logs
+   one audit row per check. This is why the log can grow fast even without clicking
+   anything — simply opening the page does this every time.
+2. **Rotate** — one `rotate` row per secret name rotated.
+3. **Set a Secret Value** — one `set` row per save.
+
+**Purpose**: a compliance/security trail specific to the Secret Provider layer, proving
+*who touched which credential and when*, without the trail itself ever becoming a way
+to leak a secret value. This is currently the **only** general-purpose audit trail in
+the app — routing rule changes, org/project edits, etc. aren't logged this way; secrets
+got this treatment because credential access is the highest-sensitivity operation in
+the system.
 
 ---
 
