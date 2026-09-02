@@ -84,7 +84,7 @@ class RestExecutor:
             raise ProviderError(f"REST API '{service.name}' call to '{endpoint.tool_name}' failed: {exc}") from exc
 
         content = rest_response_to_mcp_content(self._parse_body(response))
-		logger.info(
+        logger.info(
             "rest_tool_executed",
             service_name=service.name,
             tool_name=endpoint.tool_name,

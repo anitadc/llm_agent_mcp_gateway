@@ -5,7 +5,7 @@ A self-hosted middleware layer that sits between your internal applications/agen
 - **Multiple LLM providers** (OpenAI, Anthropic, AWS Bedrock) — via an OpenAI-compatible `/v1/chat/completions` and `/v1/embeddings` API, with auth, RBAC, rate limiting, guardrails, cost tracking, and automatic provider failover.
 - **Multiple MCP (Model Context Protocol) servers** — via a single `POST /mcp` JSON-RPC endpoint, with a dynamic **MCP Server Registry**, tool discovery, health checking, session management, and per-tool authorization.
 - **Enterprise REST APIs exposed as MCP tools** — the **API Registry** lets you register a plain REST API and its endpoints, each of which is instantly callable as an ordinary MCP tool through the same `POST /mcp` endpoint — no MCP server required, and agents can't tell (or need to tell) the difference.
-- **Pluggable secret management** — provider API keys are never stored in this app's own config; they're resolved at call time through a swappable Secret Provider layer (Infisical by default, or AWS/GCP/Azure/Vault).
+- **Pluggable secret management** — provider API keys are never stored in this app's own config; they're resolved at call time through a swappable Secret Provider layer (this app's own Postgres database, Fernet-encrypted at rest, by default — or Infisical/AWS/GCP/Azure/Vault).
 - **Pluggable identity providers** — human (dashboard/admin) authentication isn't tied to any one IdP; Keycloak is the default, with Microsoft Entra ID, Auth0, Okta, AWS IAM Identity Center, and Google Identity also supported, including per-tenant overrides.
 
 This document is about *how to run and use* the application. For the internal architecture and conventions, see [CLAUDE.md](CLAUDE.md). For the secret provider layer specifically, see [docs/secret-management.md](docs/secret-management.md); for the identity provider layer, see [docs/identity-provider-architecture.md](docs/identity-provider-architecture.md); for exposing REST APIs as MCP tools, see [docs/api-registry.md](docs/api-registry.md); for the full system architecture, see [docs/architecture.md](docs/architecture.md). For architecture-review-grade design documents, see [doc/HLD.md](doc/HLD.md) (High Level Design) and [doc/LLD.md](doc/LLD.md) (Low Level Design); for customer-facing pitch material, see [doc/HPITCH.md](doc/HPITCH.md) and [doc/LPITCH.md](doc/LPITCH.md).
@@ -71,7 +71,7 @@ Once healthy:
 - **Backend health**: http://localhost:8010/health and http://localhost:8010/ready (checks DB, Valkey, Keycloak, Guardrails)
 - **Keycloak admin console**: http://localhost:8180 (admin / admin)
 
-Provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ...) are **not** set as env vars on this stack — they're resolved at call time through the Secret Provider layer (Infisical by default). Point `SECRET_PROVIDER` and its provider-specific vars at your secret backend before `docker compose up` (or in a root `.env`) — see [docs/secret-management.md](docs/secret-management.md). `API_KEY_SECRET_PEPPER` (this gateway's own API-key hashing pepper, unrelated to LLM provider credentials) and `AWS_REGION_NAME` are still plain env vars.
+Provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ...) are **not** set as env vars on this stack — they're resolved at call time through the Secret Provider layer (this app's own Postgres database by default, via the **Secrets** admin page's "Set a Secret Value" form or `POST /admin/secrets`). Point `SECRET_PROVIDER` and its provider-specific vars at a different secret backend before `docker compose up` (or in a root `.env`) if you'd rather use Infisical/AWS/GCP/Azure/Vault — see [docs/secret-management.md](docs/secret-management.md). `API_KEY_SECRET_PEPPER` (this gateway's own API-key hashing pepper, unrelated to LLM provider credentials) and `AWS_REGION_NAME` are still plain env vars.
 
 To stop everything: `docker compose down` (add `-v` to also drop the Postgres volume).
 
@@ -306,7 +306,7 @@ From the UI: **API Services (REST)** (admin-only) under the sidebar — register
 
 ## 8. Secret management
 
-LLM provider credentials, MCP server credentials, and any other secret this gateway needs are resolved at call time through a pluggable **Secret Provider** layer — never a plain env var baked into `Settings`, and never stored in Postgres or Redis beyond a short-lived cache. Default backend: **Infisical**; also supported: AWS Secrets Manager, Google Secret Manager, Azure Key Vault, HashiCorp Vault. Full details, provider onboarding, security model, and rotation flow: [docs/secret-management.md](docs/secret-management.md).
+LLM provider credentials, MCP server credentials, and any other secret this gateway needs are resolved at call time through a pluggable **Secret Provider** layer — never a plain env var baked into `Settings`. Default backend: **this app's own Postgres database**, with values Fernet-encrypted at rest under `SECRET_STORAGE_ENCRYPTION_KEY` ;backend: **Infisical**; also supported: AWS Secrets Manager, Google Secret Manager, Azure Key Vault, HashiCorp Vault. Resolved values are still cached briefly in Valkey regardless of backend. Full details, provider onboarding, security model, and rotation flow: [docs/secret-management.md](docs/secret-management.md).
 
 Quick admin checks (Keycloak admin token, `$TOKEN` from §5.1):
 
@@ -367,7 +367,7 @@ All backend runtime config lives in `backend/.env` (template: `backend/.env.exam
 | Auth (API keys) | `API_KEY_PREFIX`, `API_KEY_SECRET_PEPPER` |
 | Guardrails | `GUARDRAILS_BASE_URL`, `GUARDRAILS_TIMEOUT_SECONDS` |
 | Provider region (non-secret) | `AWS_REGION_NAME` |
-| Secret Provider layer | `SECRET_PROVIDER`, `SECRET_CACHE_TTL_SECONDS`, plus the active provider's own vars (`INFISICAL_*`, `AWS_SECRETS_REGION`/`AWS_SECRET_NAME_PREFIX`, `GCP_PROJECT_ID`, `AZURE_KEYVAULT_NAME`, `VAULT_*`) — see [docs/secret-management.md](docs/secret-management.md) |
+| Secret Provider layer | `SECRET_PROVIDER`, `SECRET_CACHE_TTL_SECONDS`, plus the active provider's own vars (`SECRET_STORAGE_ENCRYPTION_KEY` for the default Postgres backend, or `INFISICAL_*`, `AWS_SECRETS_REGION`/`AWS_SECRET_NAME_PREFIX`, `GCP_PROJECT_ID`, `AZURE_KEYVAULT_NAME`, `VAULT_*`) — see [docs/secret-management.md](docs/secret-management.md) |
 | Identity Provider layer | `IDENTITY_PROVIDER`, `KEYCLOAK_BASE_URL`/`KEYCLOAK_REALM`/`KEYCLOAK_CLIENT_ID`/`KEYCLOAK_AUDIENCE` (default provider), plus the active provider's own vars (`ENTRA_*`, `AUTH0_*`, `OKTA_*`, `AWS_SSO_*`, `GOOGLE_*`) — see [docs/identity-provider-architecture.md](docs/identity-provider-architecture.md) |
 | MCP Gateway | `MCP_PROTOCOL_VERSION`, `MCP_CLIENT_TIMEOUT_SECONDS`, `MCP_DISCOVERY_REFRESH_SECONDS`, `MCP_HEALTH_CHECK_INTERVAL_SECONDS`, `MCP_DEFAULT_RATE_LIMIT_PER_WINDOW` |
 
