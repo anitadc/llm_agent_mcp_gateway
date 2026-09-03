@@ -8,20 +8,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.core.config import Settings, get_settings
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.valkey import valkey_client
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["health"])
 
+@router.get("/provider_info")
+@log_method(logger)
+async def get_provider_info() -> dict:
+    """Public info about which identity provider the backend is configured to use.
+
+    This is intentionally non-sensitive and helps frontends adapt their
+    login flow (Keycloak redirect vs. a dev local token form).
+    """
+    return {
+        "identity_provider": "local" #if get_settings().identity_provider is None else get_settings().identity_provider,
+        }
+
 
 @router.get("/health")
+@log_method(logger)
 async def get_health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @router.get("/ready")
+@log_method(logger)
 async def get_readiness(
     db: AsyncSession = Depends(get_db), settings: Settings = Depends(get_settings)
 ) -> JSONResponse:

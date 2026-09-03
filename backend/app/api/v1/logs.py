@@ -4,7 +4,7 @@ from datetime import date
 from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_user, get_request_log_repo
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import RequestStatus
 from app.db.models.user import User
 from app.repositories.request_log_repo import RequestLogRepo
@@ -15,6 +15,7 @@ logger = get_logger(__name__)
 
 
 @router.get("", response_model=PaginatedRequestLogs)
+@log_method(logger)
 async def list_request_logs(
     organization_id: uuid.UUID | None = None,
     project_id: uuid.UUID | None = None,

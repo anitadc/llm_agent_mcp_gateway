@@ -1,5 +1,6 @@
 from typing import Any
 
+from backend.app.identity.local_token import issue_local_jwt
 import jwt
 
 from app.core.exceptions import AuthError
@@ -15,6 +16,19 @@ class LocalProvider(IdentityProvider):
     name = "local"
 
     def __init__(self, settings: Settings):
+        # No tenant matched. If there's no global provider configured,
+        # allow a local HS256-signed token flow when explicitly enabled for
+        # development/testing via settings.allow_local_token_issue and
+        # settings.jwt_secret.
+        if not getattr(settings, "jwt_secret", None):
+            logger.warning("Local token issuance enabled but jwt_secret is not configured")
+            token, expires = issue_local_jwt(
+                    settings,
+                    user_id="ai-gateway-local-user",
+                    email="ai-gateway-local-user@example.com"
+                )
+            settings.jwt_secret = token
+
         self.settings = settings
 
     async def validate_token(self, token: str) -> dict[str, Any]:

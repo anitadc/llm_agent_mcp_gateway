@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_cost_ledger_repo, get_current_user, get_db
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.cost_ledger import CostLedger
 from app.db.models.request_log import RequestLog
 from app.db.models.user import User
@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 
 
 @router.get("/summary", response_model=UsageSummary)
+@log_method(logger)
 async def get_usage_summary(
     organization_id: uuid.UUID | None = None,
     project_id: uuid.UUID | None = None,

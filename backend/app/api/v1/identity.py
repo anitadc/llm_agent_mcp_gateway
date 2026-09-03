@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from app.api.deps import get_access_policy_repo, get_tenant_identity_config_repo, require_roles
 from app.core.config import Settings, get_settings
 from app.core.exceptions import NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.access_policy import AccessPolicy
 from app.db.models.enums import UserRole
 from app.db.models.tenant_identity_config import TenantIdentityConfig
@@ -30,6 +30,7 @@ router = APIRouter(prefix="/admin/identity", tags=["identity"])
 
 
 @router.get("/providers", response_model=IdentityProviderConfigOut)
+@log_method(logger)
 async def get_identity_providers(
     user: User = Depends(require_roles(UserRole.admin)),
     settings: Settings = Depends(get_settings),
@@ -47,6 +48,7 @@ async def get_identity_providers(
 
 
 @router.get("/tenant-configs", response_model=list[TenantIdentityConfigOut])
+@log_method(logger)
 async def list_tenant_configs(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: TenantIdentityConfigRepo = Depends(get_tenant_identity_config_repo),
@@ -57,6 +59,7 @@ async def list_tenant_configs(
 
 
 @router.post("/tenant-configs", response_model=TenantIdentityConfigOut, status_code=201)
+@log_method(logger)
 async def create_tenant_config(
     body: TenantIdentityConfigCreate,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -73,6 +76,7 @@ async def create_tenant_config(
 
 
 @router.put("/tenant-configs/{config_id}", response_model=TenantIdentityConfigOut)
+@log_method(logger)
 async def update_tenant_config(
     config_id: uuid.UUID,
     body: TenantIdentityConfigUpdate,
@@ -97,6 +101,7 @@ async def update_tenant_config(
 
 
 @router.delete("/tenant-configs/{config_id}", status_code=204)
+@log_method(logger)
 async def delete_tenant_config(
     config_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -112,6 +117,7 @@ async def delete_tenant_config(
 
 
 @router.get("/access-policies", response_model=list[AccessPolicyOut])
+@log_method(logger)
 async def list_access_policies(
     user: User = Depends(require_roles(UserRole.admin)),
     repo: AccessPolicyRepo = Depends(get_access_policy_repo),
@@ -122,6 +128,7 @@ async def list_access_policies(
 
 
 @router.post("/access-policies", response_model=AccessPolicyOut, status_code=201)
+@log_method(logger)
 async def create_access_policy(
     body: AccessPolicyCreate,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -145,6 +152,7 @@ async def create_access_policy(
 
 
 @router.patch("/access-policies/{policy_id}", response_model=AccessPolicyOut)
+@log_method(logger)
 async def update_access_policy(
     policy_id: uuid.UUID,
     body: AccessPolicyUpdate,
@@ -175,6 +183,7 @@ async def update_access_policy(
 
 
 @router.delete("/access-policies/{policy_id}", status_code=204)
+@log_method(logger)
 async def delete_access_policy(
     policy_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),

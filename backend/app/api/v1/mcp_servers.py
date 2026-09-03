@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_health_checker, get_mcp_request_log_repo, get_mcp_server_repo, require_roles
 from app.core.exceptions import NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import UserRole
 from app.db.models.mcp_server import McpServer
 from app.db.models.user import User
@@ -19,6 +19,7 @@ router = APIRouter(prefix="/mcp/servers", tags=["mcp_servers"])
 
 
 @router.get("", response_model=list[McpServerOut])
+@log_method(logger)
 async def list_mcp_servers(
     user: User = Depends(require_roles(UserRole.admin)), repo: McpServerRepo = Depends(get_mcp_server_repo)
 ) -> list[McpServerOut]:
@@ -28,6 +29,7 @@ async def list_mcp_servers(
 
 
 @router.post("", response_model=McpServerOut, status_code=201)
+@log_method(logger)
 async def create_mcp_server(
     body: McpServerCreate,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -56,6 +58,7 @@ async def create_mcp_server(
 
 
 @router.put("/{server_id}", response_model=McpServerOut)
+@log_method(logger)
 async def update_mcp_server(
     server_id: uuid.UUID,
     body: McpServerUpdate,
@@ -88,6 +91,7 @@ async def update_mcp_server(
 
 
 @router.delete("/{server_id}", status_code=204)
+@log_method(logger)
 async def delete_mcp_server(
     server_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -102,6 +106,7 @@ async def delete_mcp_server(
 
 
 @router.post("/{server_id}/health-check", response_model=McpServerOut)
+@log_method(logger)
 async def trigger_health_check(
     server_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -124,6 +129,7 @@ async def trigger_health_check(
 
 
 @router.get("/{server_id}/stats", response_model=McpServerStatsOut)
+@log_method(logger)
 async def get_mcp_server_stats(
     server_id: uuid.UUID,
     window_minutes: int = 60,

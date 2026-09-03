@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_user, get_project_user_repo, require_roles
 from app.core.exceptions import NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import UserRole
 from app.db.models.project_user import ProjectUser
 from app.db.models.user import User
@@ -17,6 +17,7 @@ router = APIRouter(prefix="/v1/project-users", tags=["project_users"])
 
 
 @router.get("", response_model=list[ProjectUserOut])
+@log_method(logger)
 async def list_project_users(
     project_id: uuid.UUID | None = None,
     user_id: uuid.UUID | None = None,
@@ -29,6 +30,7 @@ async def list_project_users(
 
 
 @router.post("", response_model=ProjectUserOut, status_code=201)
+@log_method(logger)
 async def add_project_user(
     body: ProjectUserCreate,
     user: User = Depends(require_roles(UserRole.admin, UserRole.team_lead)),
@@ -44,6 +46,7 @@ async def add_project_user(
 
 
 @router.patch("/{project_user_id}", response_model=ProjectUserOut)
+@log_method(logger)
 async def update_project_user(
     project_user_id: uuid.UUID,
     body: ProjectUserUpdate,

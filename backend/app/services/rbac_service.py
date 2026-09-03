@@ -1,7 +1,7 @@
 import uuid
 
 from app.core.exceptions import ForbiddenError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import UserRole
 from app.db.models.user import User
 
@@ -10,6 +10,7 @@ logger = get_logger(__name__)
 
 class RBACService:
     @staticmethod
+    @log_method(logger)
     def require_role(user: User, *allowed: UserRole) -> None:
         if user.role not in allowed:
             logger.warning(
@@ -21,6 +22,7 @@ class RBACService:
             raise ForbiddenError(f"Role '{user.role.value}' is not permitted to perform this action")
 
     @staticmethod
+    @log_method(logger)
     def require_same_organization(user: User, organization_id: uuid.UUID | None) -> None:
         if user.role == UserRole.admin:
             return

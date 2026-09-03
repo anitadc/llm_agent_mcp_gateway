@@ -1,7 +1,7 @@
 import uuid
 from decimal import Decimal
 
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.cost_ledger import CostLedger
 from app.db.models.enums import (
     GuardrailDirection,
@@ -22,6 +22,7 @@ from app.services.guardrails.base import GuardrailVerdict
 logger = get_logger(__name__)
 
 
+@log_method(logger)
 async def record_request(
     *,
     request_id: uuid.UUID,
@@ -95,6 +96,7 @@ async def record_request(
             raise
 
 
+@log_method(logger)
 async def record_mcp_request(
     *,
     request_id: uuid.UUID,
@@ -142,6 +144,7 @@ async def record_mcp_request(
             raise
 
 
+@log_method(logger)
 async def record_agent_invocation(
     *,
     request_id: uuid.UUID,
@@ -179,6 +182,7 @@ async def record_agent_invocation(
             raise
 
 
+@log_method(logger)
 async def record_secret_audit(
     *,
     tenant_id: str | None,

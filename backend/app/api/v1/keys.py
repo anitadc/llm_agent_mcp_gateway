@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from app.api.deps import get_api_key_repo, get_current_user, require_roles
 from app.core.config import Settings, get_settings
 from app.core.exceptions import NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import UserRole
 from app.db.models.user import User
 from app.db.valkey import valkey_client
@@ -21,6 +21,7 @@ router = APIRouter(prefix="/v1/keys", tags=["keys"])
 
 
 @router.get("", response_model=list[ApiKeyOut])
+@log_method(logger)
 async def list_keys(
     user: User = Depends(get_current_user), repo: ApiKeyRepo = Depends(get_api_key_repo)
 ) -> list[ApiKeyOut]:
@@ -30,6 +31,7 @@ async def list_keys(
 
 
 @router.post("", response_model=ApiKeyOut, status_code=201)
+@log_method(logger)
 async def create_key(
     body: ApiKeyCreate,
     user: User = Depends(get_current_user),
@@ -46,6 +48,7 @@ async def create_key(
 
 
 @router.delete("/{key_id}", status_code=204)
+@log_method(logger)
 async def revoke_key(
     key_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin, UserRole.team_lead)),

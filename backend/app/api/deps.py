@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.exceptions import AuthError, ForbiddenError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.api_key import ApiKey
 from app.db.models.enums import UserRole
 from app.db.models.user import User
@@ -63,7 +63,7 @@ __all__ = ["get_db"]
 _VIEWER_MCP_SCOPES = {"tool:read"}
 _FULL_MCP_SCOPES = {"tool:read", "tool:execute"}
 
-
+@log_method(logger)
 def get_current_principal(request: Request) -> Principal:
     principal = getattr(request.state, "principal", None)
     if principal is None:
@@ -71,14 +71,14 @@ def get_current_principal(request: Request) -> Principal:
         raise AuthError("Missing or invalid credentials")
     return principal
 
-
+@log_method(logger)
 def get_current_api_key(principal: Principal = Depends(get_current_principal)) -> ApiKey:
     if principal.kind != "api_key" or principal.api_key is None:
         logger.warning("auth_wrong_principal_kind", expected="api_key", actual=principal.kind)
         raise AuthError("This endpoint requires an API key, not a user session")
     return principal.api_key
 
-
+@log_method(logger)
 def get_current_user(principal: Principal = Depends(get_current_principal)) -> User:
     if principal.kind != "user" or principal.user is None:
         logger.warning("auth_wrong_principal_kind", expected="user", actual=principal.kind)

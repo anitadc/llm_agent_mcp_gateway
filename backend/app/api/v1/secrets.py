@@ -3,7 +3,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from app.api.deps import get_secret_audit_log_repo, get_secret_service, require_roles
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ProviderError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import SecretAuditStatus, SecretOperation, UserRole
 from app.db.models.user import User
 from app.repositories.secret_audit_log_repo import SecretAuditLogRepo
@@ -39,6 +39,7 @@ _LLM_CREDENTIAL_CHECKS: list[tuple[str, list[str]]] = [
 
 
 @router.get("/providers", response_model=SecretProviderConfigOut)
+@log_method(logger)
 async def get_secret_providers(
     user: User = Depends(require_roles(UserRole.admin)),
     settings: Settings = Depends(get_settings),
@@ -58,6 +59,7 @@ async def get_secret_providers(
 
 
 @router.get("/status", response_model=list[SecretStatusOut])
+@log_method(logger)
 async def get_secret_status(
     background_tasks: BackgroundTasks,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -104,6 +106,7 @@ async def get_secret_status(
 
 
 @router.post("", response_model=SecretSetResponse, status_code=201)
+@log_method(logger)
 async def set_secret(
     body: SecretSetRequest,
     background_tasks: BackgroundTasks,
@@ -137,6 +140,7 @@ async def set_secret(
 
 
 @router.post("/rotate", response_model=SecretRotateResponse)
+@log_method(logger)
 async def rotate_secret(
     body: SecretRotateRequest,
     background_tasks: BackgroundTasks,
@@ -193,6 +197,7 @@ async def rotate_secret(
 
 
 @router.get("/audit-log", response_model=PaginatedSecretAuditLog)
+@log_method(logger)
 async def get_secret_audit_log(
     page: int = 1,
     page_size: int = 25,

@@ -8,7 +8,7 @@ import redis.asyncio as redis
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.core.exceptions import BadRequestError, ProviderError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.api_endpoint import ApiEndpoint
 from app.db.models.api_service import ApiService
 from app.db.models.enums import RestAuthType, RestHttpMethod
@@ -58,6 +58,7 @@ class RestExecutor:
         self.secret_service = secret_service
         self.cache_client = cache_client or valkey_client
 
+    @log_method(logger)
     async def execute(
         self, service: ApiService, endpoint: ApiEndpoint, arguments: dict[str, Any]
     ) -> RestExecutionResult:
@@ -96,6 +97,7 @@ class RestExecutor:
         )
 
     @staticmethod
+    @log_method(logger)
     def _parse_body(response: httpx.Response) -> Any:
         if not response.content:
             return {"status_code": response.status_code}
@@ -104,6 +106,7 @@ class RestExecutor:
         except ValueError:
             return response.text
 
+    @log_method(logger)
     async def _send(
         self, service: ApiService, method: RestHttpMethod, url: str, request_kwargs: dict[str, Any]
     ) -> httpx.Response:
@@ -129,6 +132,7 @@ class RestExecutor:
             return await _get()
 
     @staticmethod
+    @log_method(logger)
     def _split_arguments(
         endpoint: ApiEndpoint, arguments: dict[str, Any]
     ) -> tuple[str, dict[str, Any], dict[str, str], dict[str, Any]]:
@@ -165,6 +169,7 @@ class RestExecutor:
             path = path.replace("{" + name + "}", quote(str(value), safe=""))
         return path, query, headers, body
 
+    @log_method(logger)
     async def _resolve_auth_headers(self, service: ApiService) -> dict[str, str]:
         config = service.auth_config or {}
         auth_type = service.authentication_type
@@ -189,6 +194,7 @@ class RestExecutor:
             return {"Authorization": f"Bearer {token}"} if token else {}
         return {}
 
+    @log_method(logger)
     async def _get_oauth2_token(self, service: ApiService, config: dict[str, Any]) -> str | None:
         """Client-credentials token exchange, cached in Valkey per service so a
         busy tool doesn't re-authenticate on every single call -- the same

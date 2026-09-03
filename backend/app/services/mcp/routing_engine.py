@@ -1,5 +1,5 @@
 from app.core.exceptions import NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import ApiServiceStatus, McpToolSourceType
 from app.db.models.mcp_tool import McpTool
 from app.repositories.mcp_tool_repo import McpToolRepo
@@ -19,6 +19,7 @@ class RoutingEngine:
     def __init__(self, tool_repo: McpToolRepo) -> None:
         self.tool_repo = tool_repo
 
+    @log_method(logger)
     async def resolve_tool(self, name: str) -> McpTool:
         tool = await self.tool_repo.get_by_name(name)
         if tool is None:
@@ -35,6 +36,7 @@ class RoutingEngine:
         return tool
 
     @staticmethod
+    @log_method(logger)
     def is_routable(tool: McpTool) -> bool:
         if tool.source_type == McpToolSourceType.mcp:
             return HealthChecker.is_routable(tool.server)

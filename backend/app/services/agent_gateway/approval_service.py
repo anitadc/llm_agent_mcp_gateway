@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from app.core.exceptions import BadRequestError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.agent import Agent
 from app.db.models.agent_approval_task import AgentApprovalTask
 from app.db.models.enums import AgentApprovalDecision, AgentApprovalStage, AgentLifecycleStatus, AgentRiskClass
@@ -28,12 +28,14 @@ class ApprovalService:
         self.task_repo = task_repo
         self._configured_stages = configured_stages
 
+    @log_method(logger)
     def required_stages(self, agent: Agent) -> list[AgentApprovalStage]:
         stages = [AgentApprovalStage(s.strip()) for s in self._configured_stages.split(",") if s.strip()]
         if agent.risk_class == AgentRiskClass.high and AgentApprovalStage.production not in stages:
             stages.append(AgentApprovalStage.production)
         return stages
 
+    @log_method(logger)
     async def submit_for_approval(self, agent: Agent) -> Agent:
         lifecycle.require_transition(agent.status, AgentLifecycleStatus.under_review)
         problems = validate_agent_card(agent)
@@ -55,6 +57,7 @@ class ApprovalService:
         )
         return agent
 
+    @log_method(logger)
     async def decide(
         self, task: AgentApprovalTask, *, approved: bool, approver_user_id: uuid.UUID, reason: str | None
     ) -> AgentApprovalTask:
