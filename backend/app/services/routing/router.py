@@ -7,7 +7,7 @@ import openai
 
 from app.core.config import Settings
 from app.core.exceptions import ProviderError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import ModelCapability, RoutingStrategy
 from app.db.models.routing_rule import RoutingRule
 from app.repositories.model_pricing_repo import ModelPricingRepo
@@ -53,6 +53,7 @@ class GatewayRouter:
         self.settings = settings
         self.secret_service = secret_service
 
+    @log_method(logger)
     async def resolve(
         self,
         model_alias: str,
@@ -66,6 +67,7 @@ class GatewayRouter:
             raise ProviderError(f"No active routing rule for alias '{model_alias}' ({capability.value})")
         return rule, await self._order_targets(rule)
 
+    @log_method(logger)
     async def _order_targets(self, rule: RoutingRule) -> list[dict[str, Any]]:
         targets = list(rule.targets)
         if rule.strategy == RoutingStrategy.priority:
@@ -84,6 +86,7 @@ class GatewayRouter:
             return sorted(targets, key=lambda t: latencies[(t["provider"], t["model"])])
         return targets
 
+    @log_method(logger)
     async def complete(
         self,
         model_alias: str,
@@ -113,6 +116,7 @@ class GatewayRouter:
         )
         return ProviderResponse(response, resolved_provider, resolved_model)
 
+    @log_method(logger)
     async def embed(
         self,
         model_alias: str,
@@ -142,6 +146,7 @@ class GatewayRouter:
         return ProviderResponse(response, resolved_provider, resolved_model)
 
     @staticmethod
+    @log_method(logger)
     def _provider_for_model(targets: list[dict[str, Any]], model: str | None) -> str | None:
         for target in targets:
             if target["model"] == model:

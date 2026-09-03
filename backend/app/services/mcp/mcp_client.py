@@ -8,7 +8,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from app.core.config import Settings
 from app.core.exceptions import ProviderError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.mcp_server import McpServer
 
 logger = get_logger(__name__)
@@ -58,6 +58,7 @@ class McpClient:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
+    @log_method(logger)
     def _headers(self, server: McpServer, session_id: str | None) -> dict[str, str]:
         headers = {
             "Content-Type": "application/json",
@@ -69,6 +70,7 @@ class McpClient:
         headers.update(_resolve_auth_headers(server))
         return headers
 
+    @log_method(logger)
     async def _post_raw(self, server: McpServer, body: dict[str, Any], session_id: str | None) -> McpRpcResult:
         async with httpx.AsyncClient(timeout=self._settings.mcp_client_timeout_seconds) as client:
             response = await client.post(server.base_url, json=body, headers=self._headers(server, session_id))
@@ -83,9 +85,11 @@ class McpClient:
         # underlying httpx exception, which callers' `except httpx.HTTPError` would miss.
         reraise=True,
     )
+    @log_method(logger)
     async def _post_idempotent(self, server: McpServer, body: dict[str, Any], session_id: str | None) -> McpRpcResult:
         return await self._post_raw(server, body, session_id)
 
+    @log_method(logger)
     async def initialize(self, server: McpServer) -> McpRpcResult:
         body = {
             "jsonrpc": "2.0",
@@ -107,6 +111,7 @@ class McpClient:
             )
             raise ProviderError(f"MCP server '{server.name}' initialize failed: {exc}") from exc
 
+    @log_method(logger)
     async def list_tools(self, server: McpServer, session_id: str | None) -> list[dict[str, Any]]:
         body = {"jsonrpc": "2.0", "id": str(uuid.uuid4()), "method": "tools/list", "params": {}}
         try:
@@ -122,6 +127,7 @@ class McpClient:
             raise ProviderError(f"MCP server '{server.name}' tools/list error: {result.payload['error']}")
         return result.payload.get("result", {}).get("tools", [])
 
+    @log_method(logger)
     async def call_tool(
         self,
         server: McpServer,

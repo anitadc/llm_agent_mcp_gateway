@@ -15,6 +15,13 @@ def _build_provider(name: str, settings: Settings) -> IdentityProvider:
     """The only place in the app that knows which concrete IdentityProvider
     class backs a given provider name. Every provider module is imported
     lazily, inside its own branch, mirroring app/secrets/factory.py."""
+
+    if name == "local":        
+        # Lazily import the local provider implementation.
+        from app.identity.local_provider import LocalProvider
+
+        return LocalProvider(settings)
+        
     if name == "keycloak":
         from app.identity.keycloak_provider import KeycloakProvider
 
@@ -43,23 +50,11 @@ def _build_provider(name: str, settings: Settings) -> IdentityProvider:
     raise ValueError(f"Unknown IDENTITY_PROVIDER '{name}'")
 
 
-def _configured_provider_fallback(settings: Settings) -> str:
-    """When the global provider is blank/None, pick the first configured
-    provider in a deterministic order instead of failing the whole auth flow.
-    This keeps a deployment that still has Keycloak/Entra/etc. configured
-    working while making an intentionally disabled global provider explicit."""
-    for name in PROVIDER_NAMES:
-        if is_provider_available(name, settings):
-            return name
-    raise ValueError("No IDENTITY_PROVIDER configured; set a valid provider or disable the global identity path.")
-
-
 def get_identity_provider(settings: Settings | None = None) -> IdentityProvider:
     """The default, single-tenant path: whichever provider IDENTITY_PROVIDER
     selects. See build_provider_from_tenant_config for the multi-tenant path."""
     settings = settings or get_settings()
-    provider_name = settings.identity_provider or _configured_provider_fallback(settings)
-    return _build_provider(provider_name, settings)
+    return _build_provider(settings.identity_provider, settings)
 
 
 def build_provider_from_tenant_config(provider_name: str, configuration: dict[str, Any], settings: Settings) -> IdentityProvider:

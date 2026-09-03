@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_identity, get_current_user
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.user import User
 from app.identity.models import UserIdentity
 from app.schemas.auth import SessionInfo
@@ -15,6 +15,7 @@ router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
 
 @router.get("/provider")
+@log_method(logger)
 async def get_provider_info(settings=Depends(get_settings)) -> dict:
     """Public info about which identity provider the backend is configured to use.
 
@@ -22,12 +23,12 @@ async def get_provider_info(settings=Depends(get_settings)) -> dict:
     login flow (Keycloak redirect vs. a dev local token form).
     """
     return {
-        "identity_provider": settings.identity_provider,
-        "allow_local_token_issue": bool(getattr(settings, "allow_local_token_issue", False)),
-    }
+        "identity_provider": settings.identity_provider
+        }
 
 
 @router.post("/token/exchange", response_model=SessionInfo)
+@log_method(logger)
 async def exchange_token(
     user: User = Depends(get_current_user), identity: UserIdentity = Depends(get_current_identity)
 ) -> SessionInfo:
@@ -52,6 +53,7 @@ async def exchange_token(
 
 
 @router.post("/local/issue", response_model=LocalTokenResponse)
+@log_method(logger)
 async def issue_local_token(body: LocalTokenRequest, settings=Depends(get_settings)) -> LocalTokenResponse:
     """Dev-only: issues a locally-signed JWT when no external IdP is configured.
 
@@ -59,7 +61,7 @@ async def issue_local_token(body: LocalTokenRequest, settings=Depends(get_settin
     None and `settings.allow_local_token_issue` must be True. It is intended
     for local development and tests only.
     """
-    if settings.identity_provider is not None or not settings.allow_local_token_issue:
+    if settings.identity_provider != "local":
         from fastapi import HTTPException
 
         raise HTTPException(status_code=403, detail="Local token issuance is disabled")

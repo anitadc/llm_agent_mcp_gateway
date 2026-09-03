@@ -2,7 +2,7 @@ import uuid
 
 from app.core.config import Settings
 from app.core.exceptions import AuthError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.core.security import generate_api_key, hash_api_key
 from app.db.models.api_key import ApiKey
 from app.db.models.enums import IdentityProviderName, UserRole
@@ -28,6 +28,7 @@ class AuthService:
         self.cache = cache
         self.settings = settings
 
+    @log_method(logger)
     async def issue_api_key(self, name: str, project_id: uuid.UUID, scopes: list[str]) -> tuple[ApiKey, str]:
         raw_key, prefix, hashed_key = generate_api_key(
             self.settings.api_key_prefix, self.settings.api_key_secret_pepper
@@ -38,11 +39,13 @@ class AuthService:
         logger.info("api_key_issued", api_key_id=str(api_key.id), project_id=str(project_id), scope_count=len(scopes))
         return api_key, raw_key
 
+    @log_method(logger)
     async def revoke_api_key(self, api_key: ApiKey) -> None:
         await self.api_key_repo.revoke(api_key)
         await self.cache.delete(f"apikey:{api_key.hashed_key}")
         logger.info("api_key_revoked", api_key_id=str(api_key.id))
 
+    @log_method(logger)
     async def verify_api_key(self, raw_key: str) -> ApiKey:
         """A cache lookup/write failure degrades to `cached_id is None` (see
         CacheService) -- verification still succeeds via `get_by_hashed_key`, just
@@ -66,6 +69,7 @@ class AuthService:
         await self.api_key_repo.touch_last_used(api_key)
         return api_key
 
+    @log_method(logger)
     async def sync_user_from_identity(self, identity: UserIdentity) -> User:
         """Find-or-create the internal User row for an already-validated
         UserIdentity, regardless of which IdentityProvider produced it --

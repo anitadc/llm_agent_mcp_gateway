@@ -1,7 +1,7 @@
 import time
 from datetime import datetime, timezone
 
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import McpSyncStatus
 from app.db.models.mcp_server import McpServer
 from app.db.models.mcp_tool import McpTool
@@ -28,6 +28,7 @@ class DiscoveryService:
         self.client = client
         self.health_checker = health_checker
 
+    @log_method(logger)
     async def sync_server(self, server: McpServer) -> McpServer:
         start = time.perf_counter()
         try:
@@ -70,6 +71,7 @@ class DiscoveryService:
             await self.server_repo.db.flush()
         return server
 
+    @log_method(logger)
     async def _reconcile_tools(self, server: McpServer, tools: list[dict]) -> None:
         existing_for_server = {t.name: t for t in await self.tool_repo.list_by_server(server.id)}
         seen_names: set[str] = set()
@@ -95,6 +97,7 @@ class DiscoveryService:
             if name not in seen_names:
                 await self.tool_repo.delete(row)
 
+    @log_method(logger)
     async def sync_all(self) -> list[McpServer]:
         """Best-effort across all active servers -- one server failing to sync
         must not prevent the others from refreshing."""

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from app.core.exceptions import ProviderError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import McpHealthStatus, McpServerStatus
 from app.db.models.mcp_server import McpServer
 from app.repositories.mcp_server_repo import McpServerRepo
@@ -23,6 +23,7 @@ class HealthChecker:
         self.server_repo = server_repo
         self.client = client
 
+    @log_method(logger)
     async def probe(self, server: McpServer) -> McpRpcResult | None:
         """Updates server.health_status/last_heartbeat in place and returns the
         initialize result on success (so callers can reuse its session id), or
@@ -46,6 +47,7 @@ class HealthChecker:
             server.last_heartbeat = datetime.now(timezone.utc)
             await self.server_repo.db.flush()
 
+    @log_method(logger)
     async def check_all(self) -> list[McpServer]:
         """Best-effort across every administratively-active server -- one server
         being down must not stop the others from being probed."""
@@ -55,5 +57,6 @@ class HealthChecker:
         return servers
 
     @staticmethod
+    @log_method(logger)
     def is_routable(server: McpServer) -> bool:
         return server.status == McpServerStatus.active and server.health_status == McpHealthStatus.healthy

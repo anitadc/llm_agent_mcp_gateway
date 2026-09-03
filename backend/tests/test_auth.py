@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import log_method
 from app.core.security import generate_api_key, hash_api_key, verify_api_key_hash
 from app.db.schema_cleanup import drop_stale_updatedat_triggers
 
@@ -29,6 +30,44 @@ def test_generate_api_key_is_unique() -> None:
     first, _, _ = generate_api_key("gw", "pepper")
     second, _, _ = generate_api_key("gw", "pepper")
     assert first != second
+
+
+class _FakeLogger:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, dict[str, object]]] = []
+
+    def info(self, event: str, **kwargs: object) -> None:
+        self.events.append((event, kwargs))
+
+    def exception(self, event: str, **kwargs: object) -> None:
+        self.events.append((event, kwargs))
+
+
+def test_log_method_logs_start_and_end() -> None:
+    logger = _FakeLogger()
+
+    @log_method(logger)
+    def add_one(value: int) -> int:
+        return value + 1
+
+    assert add_one(4) == 5
+    assert logger.events[0] == ("method_start", {"method": "add_one"})
+    assert logger.events[1] == ("method_end", {"method": "add_one"})
+
+
+@pytest.mark.asyncio
+async def test_log_method_logs_async_failure() -> None:
+    logger = _FakeLogger()
+
+    @log_method(logger)
+    async def broken() -> None:
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await broken()
+
+    assert logger.events[0] == ("method_start", {"method": "broken"})
+    assert logger.events[1] == ("method_failed", {"method": "broken"})
 
 
 @pytest.mark.asyncio

@@ -28,18 +28,7 @@ class Settings(BaseSettings):
     # docs/identity-provider-architecture.md. Set to None to disable the global
     # identity provider entirely for deployments that use only API keys or
     # per-tenant identity configuration.
-    identity_provider: Literal["keycloak", "entra", "auth0", "okta", "aws_identity", "google"] | None = None
-
-    @field_validator("identity_provider", mode="before")
-    @classmethod
-    def normalize_identity_provider(cls, value):
-        if value is None:
-            return None
-        if isinstance(value, str):
-            lowered = value.strip().lower()
-            if lowered in {"", "none", "null"}:
-                return None
-        return value
+    identity_provider: Literal["keycloak", "entra", "auth0", "okta", "aws_identity", "google", "local"] = "local"
 
     keycloak_base_url: str
     keycloak_realm: str
@@ -91,8 +80,8 @@ class Settings(BaseSettings):
     # the gateway itself for local frontends/tests. `jwt_secret` signs tokens
     # with HS256; keep this empty in production. `allow_local_token_issue`
     # must be explicitly enabled to expose the token-issuing endpoint.
-    jwt_secret: str | None = "sfghafsgfdasg"
-    allow_local_token_issue: bool = True
+    jwt_secret: str | None = None
+    
     # --- Secret Provider layer (app/secrets/) ---
     # Accept an explicitly empty value from Compose/environment when no backend is
     # configured for this deployment. "unset" is a valid state for local/dev stacks

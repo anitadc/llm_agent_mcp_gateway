@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import dataclass
 
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.access_policy import AccessPolicy
 from app.repositories.access_policy_repo import AccessPolicyRepo
 
@@ -46,6 +46,7 @@ class PolicyEngine:
     def __init__(self, repo: AccessPolicyRepo) -> None:
         self.repo = repo
 
+    @log_method(logger)
     async def evaluate(
         self,
         project_id: uuid.UUID | None,
@@ -73,6 +74,7 @@ class PolicyEngine:
         )
 
     @staticmethod
+    @log_method(logger)
     def _matches(
         policy: AccessPolicy,
         roles: list[str],

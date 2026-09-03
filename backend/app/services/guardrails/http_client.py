@@ -5,7 +5,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from app.core.config import Settings
 from app.core.exceptions import ProviderError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.services.guardrails.base import GuardrailsClient, GuardrailVerdict
 
 logger = get_logger(__name__)
@@ -22,6 +22,7 @@ class HttpGuardrailsClient(GuardrailsClient):
         wait=wait_exponential(multiplier=0.2, max=2),
         reraise=True,
     )
+    @log_method(logger)
     async def _post_check(self, text: str, direction: str, context: dict[str, Any]) -> GuardrailVerdict:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             response = await client.post(
@@ -31,6 +32,7 @@ class HttpGuardrailsClient(GuardrailsClient):
         response.raise_for_status()
         return GuardrailVerdict.model_validate(response.json())
 
+    @log_method(logger)
     async def _check(self, text: str, direction: str, context: dict[str, Any]) -> GuardrailVerdict:
         url = f"{self._base_url}/v1/guardrails/check"
         try:
@@ -47,8 +49,10 @@ class HttpGuardrailsClient(GuardrailsClient):
         )
         return verdict
 
+    @log_method(logger)
     async def check_prompt(self, text: str, context: dict[str, Any]) -> GuardrailVerdict:
         return await self._check(text, "prompt", context)
 
+    @log_method(logger)
     async def check_response(self, text: str, context: dict[str, Any]) -> GuardrailVerdict:
         return await self._check(text, "response", context)
