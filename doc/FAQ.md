@@ -294,6 +294,95 @@ create/delete UI, because sessions are entirely a byproduct of `initialize`/
 
 ---
 
+### How do I invoke MCP tools from an external application?
+
+There's no special SDK — any language with an HTTP client works, since it's plain
+HTTP + JSON-RPC 2.0. Here's the full integration path:
+
+**1. Get credentials with MCP access.** Scopes are **opt-in per key** — a key created
+without them has zero MCP access, even for an admin:
+
+```bash
+curl -X POST http://localhost:8010/v1/keys \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"my-app","project_id":"<project-id>","scopes":["tool:read","tool:execute"]}'
+```
+
+Store the returned `raw_key` (`gw_...`) in your app's config — it's shown once.
+
+**2. Discover what tools exist:**
+
+```bash
+curl http://localhost:8010/mcp/tools -H "Authorization: Bearer gw_..."
+```
+
+Each entry returns `name`, `description`, and `input_schema` (a JSON Schema) — build
+your `arguments` object to match that schema. Only tools whose owning server/API
+service is active *and* healthy show up here.
+
+**3. (Optional but recommended) Start a session** if your app will make several calls
+in one workflow, instead of paying the handshake cost every time:
+
+```bash
+curl -i -X POST http://localhost:8010/mcp -H "Authorization: Bearer gw_..." -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{}}'
+```
+
+Capture the `Mcp-Session-Id` response header and pass it back on every subsequent call
+in that workflow.
+
+**4. Call a tool:**
+
+```bash
+curl -X POST http://localhost:8010/mcp \
+  -H "Authorization: Bearer gw_..." -H "Content-Type: application/json" -H "Mcp-Session-Id: <from step 3>" \
+  -d '{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"<tool_name>","arguments":{...}}}'
+```
+
+**5. Handle the response correctly — this is the part people get wrong.** There are
+three distinct outcomes, and your app needs to branch on all three, not just HTTP
+status:
+
+| Outcome | HTTP status | Shape |
+|---|---|---|
+| Gateway rejected the request before forwarding it (bad scope, rate limited, unknown tool, bad JSON) | 4xx/5xx | `{"error":{"code":...,"message":...,"request_id":...}}` |
+| Gateway forwarded it; the downstream MCP server itself returned a JSON-RPC error | **200** | `{"jsonrpc":"2.0","id":...,"error":{"code":...,"message":...}}` |
+| Success, or a REST-backed tool's target API returned a non-2xx | **200** | `{"jsonrpc":"2.0","id":...,"result":{...}}` — for a REST-backed tool, check `result.isError`, since a failed target-API call still comes back as a *result*, not an error |
+
+So: check HTTP status first; if 200, check for a top-level `"error"` key before
+assuming success; if the tool is REST-backed, also check `result.isError`.
+
+**A minimal example** (Python, but the same shape applies in any language):
+
+```python
+import requests
+
+API_KEY = "gw_..."
+BASE = "http://localhost:8010"
+headers = {"Authorization": f"Bearer {API_KEY}"}
+
+init = requests.post(f"{BASE}/mcp", headers=headers, json={"jsonrpc": "2.0", "id": "1", "method": "initialize", "params": {}})
+session_id = init.headers.get("Mcp-Session-Id")
+if session_id:
+    headers["Mcp-Session-Id"] = session_id
+
+resp = requests.post(f"{BASE}/mcp", headers=headers, json={
+    "jsonrpc": "2.0", "id": "2", "method": "tools/call",
+    "params": {"name": "get_customer", "arguments": {"id": "123"}},
+})
+body = resp.json()
+if resp.status_code >= 400:
+    raise RuntimeError(f"gateway rejected: {body['error']['message']}")
+if "error" in body:
+    raise RuntimeError(f"tool call failed: {body['error']['message']}")
+result = body["result"]
+if result.get("isError"):
+    raise RuntimeError(f"target API error: {result}")
+print(result)
+```
+
+---
+
 ### Request numbers are increasing but cost isn't changing — how does budget/cost tracking work?
 
 `CostService.calculate()` (called from `chat.py`/`embeddings.py` after every completion)
