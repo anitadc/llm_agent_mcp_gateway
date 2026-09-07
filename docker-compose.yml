@@ -129,11 +129,11 @@ services:
       # instance -- zero extra services for local dev. Change the encryption key
       # for anything beyond local dev; this default is a placeholder, not a secret
       # worth keeping past first run.
-      # SECRET_PROVIDER: ${SECRET_PROVIDER:-postgres}
+      SECRET_PROVIDER: ${SECRET_PROVIDER:-postgres}
       SECRET_STORAGE_ENCRYPTION_KEY: ${SECRET_STORAGE_ENCRYPTION_KEY:-ZkcyJKfplZZRbdiUXnsC15rHoufpJvBoThi14IV8tiQ=}
       
       # Leave unset to avoid selecting any backend by default.
-      SECRET_PROVIDER: ${SECRET_PROVIDER:-None}
+      # SECRET_PROVIDER: ${SECRET_PROVIDER:-None}
       INFISICAL_SITE_URL: ${INFISICAL_SITE_URL:-http://infisical:8080}
       INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID:-}
       INFISICAL_CLIENT_SECRET: ${INFISICAL_CLIENT_SECRET:-}
