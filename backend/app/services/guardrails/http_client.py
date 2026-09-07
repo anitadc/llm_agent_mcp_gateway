@@ -30,7 +30,8 @@ class HttpGuardrailsClient(GuardrailsClient):
                 json={"text": text, "direction": direction, "context": context},
             )
         response.raise_for_status()
-        return GuardrailVerdict.model_validate(response.json())
+        # return GuardrailVerdict.model_validate(response.json())
+        return response
 
     @log_method(logger)
     async def _check(self, text: str, direction: str, context: dict[str, Any]) -> GuardrailVerdict:
