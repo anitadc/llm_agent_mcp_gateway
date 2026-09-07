@@ -58,3 +58,16 @@ async def update_provider_config(
     await repo.db.refresh(config)
     logger.info("provider_config_updated", provider_config_id=str(provider_config_id), enabled=config.enabled)
     return ProviderConfigOut.model_validate(config)
+
+
+@router.delete("/{provider_config_id}", status_code=204)
+async def delete_provider_config(
+    provider_config_id: uuid.UUID,
+    user: User = Depends(require_roles(UserRole.admin)),
+    repo: ProviderConfigRepo = Depends(get_provider_config_repo),
+) -> None:
+    config = await repo.get(provider_config_id)
+    if config is None:
+        raise NotFoundError("Provider config not found")
+    await repo.delete(config)
+    logger.info("provider_config_deleted", provider_config_id=str(provider_config_id), provider=config.provider)

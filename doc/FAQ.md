@@ -287,6 +287,102 @@ curl -X POST http://localhost:8010/v1/model-pricing \
 
 ---
 
+### Routing Rules explained simply — what is a Model Alias, Capability, Strategy, Target, and Priority, and how do I set one up?
+
+Think of a **Routing Rule** as a phone directory entry. Your application never dials a
+real AI provider directly — it just asks the gateway for a *name* (like `"gpt-4o-mini"`
+or `"fast-chat"`), and a Routing Rule tells the gateway what that name actually means:
+which real AI service to call, in what order, and how to pick between them if you've
+listed more than one. Without a rule for that exact name, the gateway has nowhere to
+send the request — which is why you get the `"No active routing rule"` error below if
+one is missing.
+
+Here's every field on the "New rule" form, in plain terms:
+
+**Model alias** — the nickname your application uses. This is just a label *you*
+invent; it doesn't have to match any real provider's model name (though it's simplest
+if it does, e.g. calling it `"gpt-4o-mini"` when it actually points at OpenAI's
+`gpt-4o-mini`). Whatever you type here must match exactly what your app sends as
+`"model"` in its request.
+
+**Capability** — what *kind* of AI task this rule is for: `chat` (having a conversation
+/ generating text) or `embedding` (turning text into a list of numbers used for search
+and similarity matching). A rule only ever applies to requests of its own capability —
+a `chat` rule is invisible to an embedding request for the same alias, and vice versa.
+
+**Targets** — the actual list of real AI backends this alias is allowed to use. Each
+target is three things:
+- **Provider**: which AI company — `openai`, `anthropic`, or `bedrock` (AWS) today.
+- **Model**: that company's exact model name (e.g. `gpt-4o-mini`, `claude-3-5-haiku-20241022`).
+- **Weight**: a small number used to break ties between targets (see Strategy below).
+
+You can list more than one target as a **fallback chain** — if the first one fails
+(the provider is down, the credential is wrong, etc.), the gateway automatically tries
+the next one. Your application never needs to know which target actually answered.
+
+**Strategy** — *how* to order multiple targets when you've listed more than one:
+- **`priority`** — always try them in a fixed order you control via each target's
+  **Weight** (the lower the weight number, the sooner it's tried — weight `1` before
+  weight `2`). Simplest option, good for "always prefer X, fall back to Y."
+- **`cost`** — automatically try the cheapest target first, based on what you've entered
+  on the Model Pricing page. A target with no pricing entered is treated as the most
+  expensive, so it's tried last.
+- **`latency`** — automatically try whichever target has been responding fastest
+  recently, based on real request history. A target with no history yet is tried last.
+
+If you only have one target, Strategy doesn't matter — there's nothing to order.
+
+**Priority (the number field)** — easy to confuse with the `priority` Strategy option
+above, but it does something completely different: it decides which **rule** wins when
+you've created more than one rule for the *same* alias + capability (say, two separate
+global rules both named `"gpt-4o-mini"` for `chat`). Whichever of those competing rules
+has the **higher** Priority number is used, and the other is ignored *completely* — this
+is not a fallback chain like Targets are, it's winner-take-all between rules. If you
+only ever create one rule per alias+capability, you can safely leave this at its
+default and never think about it again. (For the full technical tie-breaking order,
+including project/user-scoped rules beating global ones, see the entry further below.)
+
+**Active** — a simple on/off switch. An inactive rule is invisible to the gateway, as if
+it didn't exist.
+
+**A complete worked example**: "My app should call the alias `quick-helper` for chat,
+preferring OpenAI but falling back to Anthropic if OpenAI is ever down."
+
+| Field | Value |
+|---|---|
+| Model alias | `quick-helper` |
+| Capability | `chat` |
+| Strategy | `priority` |
+| Targets | 1: provider `openai`, model `gpt-4o-mini`, weight `1` — 2: provider `anthropic`, model `claude-3-5-haiku-20241022`, weight `2` |
+| Priority | `100` (default is fine — no competing rule exists yet) |
+| Active | ✅ |
+
+With this saved, sending `{"model": "quick-helper", ...}` to `/v1/chat/completions`
+tries OpenAI's `gpt-4o-mini` first; if that call fails for any reason, the gateway
+automatically retries the exact same request against Anthropic's
+`claude-3-5-haiku-20241022` instead — no code change or retry logic needed on your
+side.
+
+**Step by step, in the UI**:
+1. Go to the **Routing Rules** page → **New rule**.
+2. Type your **Model alias** (whatever string your app will send as `"model"`).
+3. Pick the **Capability** (`chat` or `embedding`).
+4. Pick a **Strategy** — `priority` is the easiest to reason about when starting out.
+5. Add one or more **Targets**: pick a **Provider**, type its exact **Model** name, and
+   set a **Weight** if you're using more than one target with the `priority` strategy.
+6. Leave **Priority** at its default unless you already know you'll have competing
+   rules for the same alias.
+7. Check **Active** and save.
+8. Before testing: make sure that provider's real credential is set on the **Secrets**
+   page (see below), and add a row on the **Model Pricing** page for the same
+   provider/model if you want accurate cost tracking (see the cost-tracking entry
+   above) — a routing rule alone doesn't handle either of those.
+
+A rule created via the UI form is always **global** (it applies to every project/API
+key) — there's no project/user scoping exposed there today, only via the API.
+
+---
+
 ### I called `/v1/chat/completions` and got `"No active routing rule for alias 'X'"` — what do I do?
 
 Create a **Routing Rule** (Routing Rules page) with:

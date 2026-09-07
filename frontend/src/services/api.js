@@ -50,6 +50,7 @@ export const endpoints = {
   listProviderConfigs: () => api.get("/v1/provider-configs"),
   createProviderConfig: (data) => api.post("/v1/provider-configs", data),
   updateProviderConfig: (id, data) => api.patch(`/v1/provider-configs/${id}`, data),
+  deleteProviderConfig: (id) => api.delete(`/v1/provider-configs/${id}`),
 
   listModelPricing: () => api.get("/v1/model-pricing"),
   createModelPricing: (data) => api.post("/v1/model-pricing", data),
