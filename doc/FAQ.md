@@ -249,6 +249,51 @@ returned session id automatically across calls.
 
 ---
 
+### What is an "MCP Session" in this application?
+
+It's the gateway's own bookkeeping for something the MCP protocol requires: a stateful
+handshake between a client and a server. It solves a specific problem — the gateway
+sits between *your* application and potentially *many* different MCP servers, so it
+needs to track, per client, which underlying per-server session it's already
+established, instead of re-handshaking with every server on every call.
+
+**The data model (`mcp_sessions` table)** — each row is:
+
+| Field | What it holds |
+|---|---|
+| `client_session_id` | The session id **your app** sees, passed via the `Mcp-Session-Id` header |
+| `server_sessions` | A dict `{server_id: server_session_id}` — the *real* session id each individual MCP server handed back when the gateway called that server's own `initialize` |
+| `project_id` / `api_key_id` | Which project/key this session belongs to (nullable, for audit/ownership) |
+| `last_used_at` | Auto-updated on every use |
+
+So one client session id can map to **several** different server-side session ids
+simultaneously — one per MCP server you've talked to during that session.
+
+**Why it exists / how it's used**:
+1. First call (no `Mcp-Session-Id` header): the gateway generates a new
+   `client_session_id`, creates a row, and returns it in the response header.
+2. When a `tools/call` targets a specific MCP server for the first time in that client
+   session, the gateway calls that server's own `initialize`, gets back a
+   server-issued session id, and stores it in `server_sessions[server_id]`.
+3. On a later call reusing the same `Mcp-Session-Id` header against the *same* server,
+   the gateway reuses the already-established server session instead of
+   re-initializing — cheaper, and preserves whatever stateful context that server
+   itself keeps tied to its session (e.g. pagination cursors).
+4. It's **persisted in Postgres, not in-memory** — deliberately, so the mapping
+   survives a gateway restart rather than forcing every client to re-handshake.
+
+You don't have to manage this yourself: if you never send `Mcp-Session-Id`, the
+gateway still works correctly, just without reuse — it creates a fresh session each
+call.
+
+**Where you see it**: the **MCP Sessions** page (and `GET /mcp/sessions`) is
+**read-only** — just a live viewer into these client↔server mappings for debugging
+("why is this call slow / which server session is this tied to"). There's no
+create/delete UI, because sessions are entirely a byproduct of `initialize`/
+`tools/call` traffic, not something you configure ahead of time.
+
+---
+
 ### Request numbers are increasing but cost isn't changing — how does budget/cost tracking work?
 
 `CostService.calculate()` (called from `chat.py`/`embeddings.py` after every completion)
