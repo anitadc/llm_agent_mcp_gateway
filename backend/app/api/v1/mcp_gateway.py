@@ -17,7 +17,7 @@ from app.api.deps import (
 )
 from app.core.config import Settings, get_settings
 from app.core.exceptions import BadRequestError, ForbiddenError, GatewayException
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import McpToolSourceType, RequestStatus
 from app.db.models.mcp_session import McpSession
 from app.db.models.mcp_tool import McpTool
@@ -53,6 +53,7 @@ def _require_scope(principal: Principal, scope: str) -> None:
 
 
 @router.post("/mcp", response_model=JsonRpcResponse, response_model_exclude_none=True)
+@log_method(logger)
 async def mcp_gateway(
     body: JsonRpcRequest,
     request: Request,

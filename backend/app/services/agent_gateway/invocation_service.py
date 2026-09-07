@@ -4,7 +4,7 @@ from typing import Any
 import httpx
 
 from app.core.config import Settings
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.agent import Agent
 from app.db.models.enums import AgentLifecycleStatus, RequestStatus
 from app.repositories.agent_repo import AgentRepo
@@ -43,6 +43,7 @@ class AgentInvocationService:
         self.secret_service = secret_service
         self.settings = settings
 
+    @log_method(logger)
     async def invoke(
         self,
         *,
@@ -80,6 +81,7 @@ class AgentInvocationService:
             error="No access policy permits this role/identity provider for any agent serving this capability",
         )
 
+    @log_method(logger)
     async def _dispatch(self, agent: Agent, operation: str | None, payload: dict[str, Any]) -> AgentInvocationResult:
         if not agent.endpoint_url:
             return AgentInvocationResult(
@@ -126,6 +128,7 @@ class AgentInvocationService:
         )
 
     @staticmethod
+    @log_method(logger)
     def _parse_body(response: httpx.Response) -> Any:
         if not response.content:
             return None
@@ -134,6 +137,7 @@ class AgentInvocationService:
         except ValueError:
             return response.text
 
+    @log_method(logger)
     async def _resolve_auth_headers(self, agent: Agent) -> dict[str, str]:
         config = agent.auth_config or {}
         auth_type = config.get("type", "none")

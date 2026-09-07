@@ -21,7 +21,7 @@ from app.services.cache_service import CacheService
 
 logger = get_logger(__name__)
 
-UNAUTHENTICATED_PATHS = {"/health", "/ready", "/docs", "/openapi.json", "/redoc"}
+UNAUTHENTICATED_PATHS = {"/health", "/ready", "/docs", "/openapi.json", "/redoc", "/v1/auth/provider", "/v1/auth/local/issue"}
 
 
 @dataclass

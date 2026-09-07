@@ -1,7 +1,7 @@
 import redis.asyncio as redis
 
 from app.core.config import Settings
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.valkey import valkey_client
 from app.secrets.base import SecretProvider
 
@@ -60,6 +60,7 @@ class SecretService:
         except redis.exceptions.RedisError as exc:
             logger.warning("secret_cache_unavailable", operation="delete" if value is None else "set", error=str(exc))
 
+    @log_method(logger)
     async def get_secret(self, secret_name: str, tenant: str | None = None, force_refresh: bool = False) -> str | None:
         cache_key = self._cache_key(secret_name, tenant)
         if not force_refresh:
@@ -71,6 +72,7 @@ class SecretService:
         await self._cache_write(cache_key, value)
         return value
 
+    @log_method(logger)
     async def set_secret(self, secret_name: str, value: str, tenant: str | None = None) -> None:
         await self.provider.set_secret(secret_name, value, tenant=tenant)
         # Invalidate rather than pre-warm: the next get_secret re-reads from the
@@ -78,9 +80,11 @@ class SecretService:
         # stale cached value from before the write.
         await self._cache_write(self._cache_key(secret_name, tenant), None)
 
+    @log_method(logger)
     async def delete_secret(self, secret_name: str, tenant: str | None = None) -> None:
         await self.provider.delete_secret(secret_name, tenant=tenant)
         await self._cache_write(self._cache_key(secret_name, tenant), None)
 
+    @log_method(logger)
     async def invalidate(self, secret_name: str, tenant: str | None = None) -> None:
         await self._cache_write(self._cache_key(secret_name, tenant), None)

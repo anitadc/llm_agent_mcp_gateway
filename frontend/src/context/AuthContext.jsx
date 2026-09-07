@@ -15,7 +15,7 @@ export function AuthProvider({ children }) {
     let settled = false;
 
     const timeoutId = setTimeout(() => {
-      if (!settled) {
+      if (!settled && authService.isKeycloakConfigured) {
         settled = true;
         console.error("Keycloak init did not resolve within timeout — check that Keycloak is reachable and third-party cookies/iframes aren't being blocked.");
         setInitError("Could not reach the login server in time.");
@@ -29,14 +29,14 @@ export function AuthProvider({ children }) {
         if (settled) return;
         settled = true;
         clearTimeout(timeoutId);
-        setAuthenticated(isAuthenticated);
+        setAuthenticated(Boolean(isAuthenticated));
         setReady(true);
       })
       .catch((error) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeoutId);
-        console.error("Keycloak init failed:", error);
+        console.error("Auth init failed:", error);
         setInitError("Failed to initialize login. See browser console for details.");
         setReady(true);
       });
@@ -52,6 +52,8 @@ export function AuthProvider({ children }) {
     email: authenticated ? authService.getEmail() : null,
     login: authService.login,
     logout: authService.logout,
+    issueLocalToken: authService.issueLocalToken,
+    isKeycloakConfigured: authService.isKeycloakConfigured,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

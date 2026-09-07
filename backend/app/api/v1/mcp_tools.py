@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import get_discovery_service, get_mcp_tool_repo, require_mcp_scope, require_roles
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import McpSyncStatus, UserRole
 from app.db.models.user import User
 from app.middleware.auth_middleware import Principal
@@ -15,6 +15,7 @@ router = APIRouter(prefix="/mcp/tools", tags=["mcp_tools"])
 
 
 @router.get("", response_model=list[McpToolOut])
+@log_method(logger)
 async def list_tools(
     q: str | None = None,
     include_unavailable: bool = False,
@@ -35,6 +36,7 @@ async def list_tools(
 
 
 @router.post("/sync", response_model=list[McpServerOut])
+@log_method(logger)
 async def sync_tools(
     user: User = Depends(require_roles(UserRole.admin)),
     discovery: DiscoveryService = Depends(get_discovery_service),

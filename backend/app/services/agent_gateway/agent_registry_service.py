@@ -1,7 +1,7 @@
 from typing import Any
 
 from app.core.exceptions import BadRequestError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.agent import Agent
 from app.db.models.enums import AgentLifecycleStatus
 from app.repositories.agent_repo import AgentRepo
@@ -10,6 +10,7 @@ from app.services.agent_gateway import lifecycle
 logger = get_logger(__name__)
 
 
+@log_method(logger)
 def validate_agent_card(agent: Agent) -> list[str]:
     """Lightweight structural validation only -- NOT validation against the
     official A2A Agent Card JSON Schema. Real A2A schema/version/interface
@@ -37,6 +38,7 @@ class AgentRegistryService:
     def __init__(self, agent_repo: AgentRepo) -> None:
         self.agent_repo = agent_repo
 
+    @log_method(logger)
     async def register(self, **fields: Any) -> Agent:
         if await self.agent_repo.get_by_key(fields["agent_key"]) is not None:
             raise BadRequestError(f"Agent key '{fields['agent_key']}' is already registered")
@@ -44,6 +46,7 @@ class AgentRegistryService:
         logger.info("agent_registered", agent_key=agent.agent_key, agent_id=str(agent.id))
         return agent
 
+    @log_method(logger)
     async def update(self, agent: Agent, **fields: Any) -> Agent:
         if agent.status not in (AgentLifecycleStatus.draft, AgentLifecycleStatus.rejected):
             raise BadRequestError(f"Agent '{agent.agent_key}' cannot be edited while '{agent.status.value}'")
@@ -54,6 +57,7 @@ class AgentRegistryService:
         await self.agent_repo.db.refresh(agent)
         return agent
 
+    @log_method(logger)
     async def publish(self, agent: Agent) -> Agent:
         lifecycle.require_transition(agent.status, AgentLifecycleStatus.active)
         problems = validate_agent_card(agent)
@@ -66,6 +70,7 @@ class AgentRegistryService:
         logger.info("agent_published", agent_key=agent.agent_key)
         return agent
 
+    @log_method(logger)
     async def suspend(self, agent: Agent) -> Agent:
         lifecycle.require_transition(agent.status, AgentLifecycleStatus.suspended)
         agent.status = AgentLifecycleStatus.suspended
@@ -74,6 +79,7 @@ class AgentRegistryService:
         logger.info("agent_suspended", agent_key=agent.agent_key)
         return agent
 
+    @log_method(logger)
     async def reactivate(self, agent: Agent) -> Agent:
         lifecycle.require_transition(agent.status, AgentLifecycleStatus.active)
         agent.status = AgentLifecycleStatus.active
@@ -82,6 +88,7 @@ class AgentRegistryService:
         logger.info("agent_reactivated", agent_key=agent.agent_key)
         return agent
 
+    @log_method(logger)
     async def deprecate(self, agent: Agent) -> Agent:
         lifecycle.require_transition(agent.status, AgentLifecycleStatus.deprecated)
         agent.status = AgentLifecycleStatus.deprecated
@@ -90,6 +97,7 @@ class AgentRegistryService:
         logger.info("agent_deprecated", agent_key=agent.agent_key)
         return agent
 
+    @log_method(logger)
     async def retire(self, agent: Agent) -> Agent:
         lifecycle.require_transition(agent.status, AgentLifecycleStatus.retired)
         agent.status = AgentLifecycleStatus.retired
@@ -99,6 +107,7 @@ class AgentRegistryService:
         return agent
 
     @staticmethod
+    @log_method(logger)
     def build_agent_card(agent: Agent) -> dict[str, Any]:
         """A simplified Agent Card -- NOT the official A2A schema (Future
         Capability). Governed fields always win over whatever a registrant put

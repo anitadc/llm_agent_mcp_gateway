@@ -13,7 +13,7 @@ from app.api.deps import (
     get_project_repo,
 )
 from app.core.exceptions import GuardrailBlockedError, NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.api_key import ApiKey
 from app.db.models.enums import GuardrailDirection, ModelCapability, RequestStatus
 from app.repositories.project_repo import ProjectRepo
@@ -31,6 +31,7 @@ router = APIRouter(prefix="/v1", tags=["embeddings"])
 
 
 @router.post("/embeddings", response_model=EmbeddingResponse)
+@log_method(logger)
 async def create_embedding(
     body: EmbeddingRequest,
     request: Request,

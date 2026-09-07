@@ -6,9 +6,14 @@ registration) and RestExecutor (response shaping)."""
 import json
 from typing import Any
 
+from app.core.logging import get_logger, log_method
+
+logger = get_logger(__name__)
+
 _JSON_SCHEMA_TYPES = {"string", "integer", "number", "boolean", "array", "object"}
 
 
+@log_method(logger)
 def endpoint_to_input_schema(parameters: dict[str, Any]) -> dict[str, Any]:
     """Builds the MCP `inputSchema` a caller sees from an endpoint's registered
     `parameters` (see ApiEndpoint.parameters' docstring for the per-parameter
@@ -35,6 +40,7 @@ def endpoint_to_input_schema(parameters: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
+@log_method(logger)
 def rest_response_to_mcp_content(body: Any) -> dict[str, Any]:
     """Converts a REST response body into the standard MCP tool-result shape
     (`{"content": [{"type": "text", "text": ...}]}`) every caller of `tools/call`

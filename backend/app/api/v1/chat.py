@@ -13,7 +13,7 @@ from app.api.deps import (
     get_project_repo,
 )
 from app.core.exceptions import GuardrailBlockedError, NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.api_key import ApiKey
 from app.db.models.enums import GuardrailDirection, ModelCapability, RequestStatus
 from app.repositories.project_repo import ProjectRepo
@@ -37,6 +37,7 @@ router = APIRouter(prefix="/v1", tags=["chat"])
 
 
 @router.post("/chat/completions", response_model=ChatCompletionResponse)
+@log_method(logger)
 async def create_chat_completion(
     body: ChatCompletionRequest,
     request: Request,

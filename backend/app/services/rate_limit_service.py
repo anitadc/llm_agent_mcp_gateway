@@ -4,7 +4,7 @@ import redis.asyncio as redis
 
 from app.core.config import get_settings
 from app.core.exceptions import RateLimitError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.valkey import valkey_client
 
 logger = get_logger(__name__)
@@ -26,6 +26,7 @@ class RateLimitService:
         self.window_seconds = window_seconds if window_seconds is not None else get_settings().rate_limit_window_seconds
         self._script = self.client.register_script(_INCR_AND_EXPIRE)
 
+    @log_method(logger)
     async def check(self, key_id: str, limit_per_window: int = DEFAULT_REQUESTS_PER_WINDOW) -> None:
         window_start = int(time.time() // self.window_seconds)
         redis_key = f"ratelimit:{key_id}:{window_start}"

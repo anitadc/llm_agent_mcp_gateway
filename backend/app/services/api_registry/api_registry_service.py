@@ -2,7 +2,7 @@ import uuid
 from typing import Any
 
 from app.core.exceptions import BadRequestError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.api_endpoint import ApiEndpoint
 from app.db.models.enums import McpToolSourceType, RestHttpMethod
 from app.db.models.mcp_tool import McpTool
@@ -35,6 +35,7 @@ class ApiRegistryService:
         self.tool_repo = tool_repo
         self.executor = executor
 
+    @log_method(logger)
     async def register_endpoint(
         self,
         api_service_id: uuid.UUID,
@@ -68,6 +69,7 @@ class ApiRegistryService:
         logger.info("api_endpoint_registered", tool_name=tool_name, api_service_id=str(api_service_id))
         return await self.endpoint_repo.get(endpoint.id)
 
+    @log_method(logger)
     async def update_endpoint(
         self,
         endpoint: ApiEndpoint,
@@ -94,11 +96,13 @@ class ApiRegistryService:
         logger.info("api_endpoint_updated", tool_name=endpoint.tool_name, endpoint_id=str(endpoint.id))
         return endpoint
 
+    @log_method(logger)
     async def delete_endpoint(self, endpoint: ApiEndpoint) -> None:
         # The paired McpTool row cascades via api_endpoint_id's ondelete=CASCADE.
         await self.endpoint_repo.delete(endpoint)
         logger.info("api_endpoint_deleted", tool_name=endpoint.tool_name, endpoint_id=str(endpoint.id))
 
+    @log_method(logger)
     async def _sync_tool(self, endpoint: ApiEndpoint) -> None:
         """Regenerates the endpoint's paired McpTool row's input_schema/enabled
         state from its current parameters -- called on every register/update so
@@ -121,6 +125,7 @@ class ApiRegistryService:
             tool.enabled = endpoint.enabled
         await self.tool_repo.db.flush()
 
+    @log_method(logger)
     async def execute(self, tool: McpTool, arguments: dict[str, Any]) -> RestExecutionResult:
         endpoint = tool.api_endpoint
         return await self.executor.execute(endpoint.api_service, endpoint, arguments)

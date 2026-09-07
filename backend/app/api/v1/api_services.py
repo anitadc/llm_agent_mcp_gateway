@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_api_endpoint_repo, get_api_registry_service, get_api_service_repo, require_roles
 from app.core.exceptions import NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.api_service import ApiService
 from app.db.models.enums import UserRole
 from app.db.models.user import User
@@ -26,6 +26,7 @@ router = APIRouter(prefix="/mcp/api-services", tags=["api_registry"])
 
 
 @router.get("", response_model=list[ApiServiceOut])
+@log_method(logger)
 async def list_api_services(
     user: User = Depends(require_roles(UserRole.admin)), repo: ApiServiceRepo = Depends(get_api_service_repo)
 ) -> list[ApiServiceOut]:
@@ -35,6 +36,7 @@ async def list_api_services(
 
 
 @router.post("", response_model=ApiServiceOut, status_code=201)
+@log_method(logger)
 async def create_api_service(
     body: ApiServiceCreate,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -61,6 +63,7 @@ async def create_api_service(
 
 
 @router.put("/{service_id}", response_model=ApiServiceOut)
+@log_method(logger)
 async def update_api_service(
     service_id: uuid.UUID,
     body: ApiServiceUpdate,
@@ -98,6 +101,7 @@ async def update_api_service(
 
 
 @router.delete("/{service_id}", status_code=204)
+@log_method(logger)
 async def delete_api_service(
     service_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -114,6 +118,7 @@ async def delete_api_service(
 
 
 @router.get("/{service_id}/endpoints", response_model=list[ApiEndpointOut])
+@log_method(logger)
 async def list_api_endpoints(
     service_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -125,6 +130,7 @@ async def list_api_endpoints(
 
 
 @router.post("/{service_id}/endpoints", response_model=ApiEndpointOut, status_code=201)
+@log_method(logger)
 async def register_api_endpoint(
     service_id: uuid.UUID,
     body: ApiEndpointCreate,
@@ -151,6 +157,7 @@ async def register_api_endpoint(
 
 
 @router.put("/{service_id}/endpoints/{endpoint_id}", response_model=ApiEndpointOut)
+@log_method(logger)
 async def update_api_endpoint(
     service_id: uuid.UUID,
     endpoint_id: uuid.UUID,
@@ -178,6 +185,7 @@ async def update_api_endpoint(
 
 
 @router.delete("/{service_id}/endpoints/{endpoint_id}", status_code=204)
+@log_method(logger)
 async def delete_api_endpoint(
     service_id: uuid.UUID,
     endpoint_id: uuid.UUID,

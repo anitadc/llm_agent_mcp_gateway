@@ -19,3 +19,17 @@ class SessionInfo(BaseModel):
     roles: list[str] = []
     groups: list[str] = []
     attributes: dict[str, Any] = {}
+
+
+class LocalTokenRequest(BaseModel):
+    user_id: str
+    email: str
+    tenant_id: str | None = None
+    roles: list[str] = []
+    groups: list[str] = []
+    expires_seconds: int = 3600
+
+
+class LocalTokenResponse(BaseModel):
+    token: str
+    expires_in: int

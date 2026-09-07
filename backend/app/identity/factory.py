@@ -15,6 +15,13 @@ def _build_provider(name: str, settings: Settings) -> IdentityProvider:
     """The only place in the app that knows which concrete IdentityProvider
     class backs a given provider name. Every provider module is imported
     lazily, inside its own branch, mirroring app/secrets/factory.py."""
+
+    if name == "local":        
+        # Lazily import the local provider implementation.
+        from app.identity.local_provider import LocalProvider
+
+        return LocalProvider(settings)
+        
     if name == "keycloak":
         from app.identity.keycloak_provider import KeycloakProvider
 

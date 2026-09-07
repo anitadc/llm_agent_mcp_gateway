@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_budget_repo, get_cost_ledger_repo, require_roles
 from app.core.exceptions import NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.budget import Budget
 from app.db.models.enums import BudgetPeriod, UserRole
 from app.db.models.user import User
@@ -48,6 +48,7 @@ async def _to_out(budget: Budget, cost_ledger_repo: CostLedgerRepo) -> BudgetOut
 
 
 @router.get("", response_model=list[BudgetOut])
+@log_method(logger)
 async def list_budgets(
     organization_id: uuid.UUID | None = None,
     project_id: uuid.UUID | None = None,
@@ -61,6 +62,7 @@ async def list_budgets(
 
 
 @router.post("", response_model=BudgetOut, status_code=201)
+@log_method(logger)
 async def create_budget(
     body: BudgetCreate,
     user: User = Depends(require_roles(UserRole.admin, UserRole.team_lead)),
@@ -83,6 +85,7 @@ async def create_budget(
 
 
 @router.patch("/{budget_id}", response_model=BudgetOut)
+@log_method(logger)
 async def update_budget(
     budget_id: uuid.UUID,
     body: BudgetUpdate,
@@ -107,6 +110,7 @@ async def update_budget(
 
 
 @router.delete("/{budget_id}", status_code=204)
+@log_method(logger)
 async def delete_budget(
     budget_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin, UserRole.team_lead)),

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_user, get_mcp_session_repo
 from app.core.exceptions import NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.user import User
 from app.repositories.mcp_session_repo import McpSessionRepo
 from app.schemas.mcp import McpSessionOut
@@ -12,6 +12,7 @@ logger = get_logger(__name__)
 
 
 @router.get("", response_model=list[McpSessionOut])
+@log_method(logger)
 async def list_mcp_sessions(
     user: User = Depends(get_current_user), repo: McpSessionRepo = Depends(get_mcp_session_repo)
 ) -> list[McpSessionOut]:
@@ -21,6 +22,7 @@ async def list_mcp_sessions(
 
 
 @router.get("/{client_session_id}", response_model=McpSessionOut)
+@log_method(logger)
 async def get_mcp_session(
     client_session_id: str,
     user: User = Depends(get_current_user),

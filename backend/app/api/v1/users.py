@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import require_roles, get_user_repo
 from app.core.exceptions import NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import UserRole
 from app.db.models.user import User
 from app.repositories.user_repo import UserRepo
@@ -16,6 +16,7 @@ router = APIRouter(prefix="/v1/users", tags=["users"])
 
 
 @router.get("", response_model=list[UserOut])
+@log_method(logger)
 async def list_users(
     organization_id: uuid.UUID | None = None,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -27,6 +28,7 @@ async def list_users(
 
 
 @router.post("", response_model=UserOut, status_code=201)
+@log_method(logger)
 async def create_user(
     body: UserCreate,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -39,6 +41,7 @@ async def create_user(
 
 
 @router.patch("/{user_id}", response_model=UserOut)
+@log_method(logger)
 async def update_user(
     user_id: uuid.UUID,
     body: UserUpdate,

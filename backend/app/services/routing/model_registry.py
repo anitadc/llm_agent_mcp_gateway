@@ -3,7 +3,7 @@ from typing import Any
 import litellm
 
 from app.core.config import Settings
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.secrets.service import SecretService
 
 logger = get_logger(__name__)
@@ -18,6 +18,7 @@ _SECRET_NAMES_FOR_PROVIDER: dict[str, dict[str, str]] = {
 }
 
 
+@log_method(logger)
 async def _litellm_params_for(
     provider: str, model: str, settings: Settings, secret_service: SecretService
 ) -> dict[str, Any]:
@@ -40,6 +41,7 @@ async def _litellm_params_for(
     return params
 
 
+@log_method(logger)
 async def build_router(
     model_alias: str, targets: list[dict[str, Any]], settings: Settings, secret_service: SecretService
 ) -> litellm.Router:

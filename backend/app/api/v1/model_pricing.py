@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_model_pricing_repo, require_roles
 from app.core.exceptions import NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import UserRole
 from app.db.models.model_pricing import ModelPricing
 from app.db.models.user import User
@@ -17,6 +17,7 @@ router = APIRouter(prefix="/v1/model-pricing", tags=["model_pricing"])
 
 
 @router.get("", response_model=list[ModelPricingOut])
+@log_method(logger)
 async def list_model_pricing(
     user: User = Depends(require_roles(UserRole.admin)), repo: ModelPricingRepo = Depends(get_model_pricing_repo)
 ) -> list[ModelPricingOut]:
@@ -26,6 +27,7 @@ async def list_model_pricing(
 
 
 @router.post("", response_model=ModelPricingOut, status_code=201)
+@log_method(logger)
 async def create_model_pricing(
     body: ModelPricingCreate,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -45,6 +47,7 @@ async def create_model_pricing(
 
 
 @router.patch("/{pricing_id}", response_model=ModelPricingOut)
+@log_method(logger)
 async def update_model_pricing(
     pricing_id: uuid.UUID,
     body: ModelPricingUpdate,
@@ -66,6 +69,7 @@ async def update_model_pricing(
 
 
 @router.delete("/{pricing_id}", status_code=204)
+@log_method(logger)
 async def delete_model_pricing(
     pricing_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),

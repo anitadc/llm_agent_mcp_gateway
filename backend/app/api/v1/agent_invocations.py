@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from app.api.deps import get_agent_invocation_repo, get_agent_invocation_service, get_current_principal, get_policy_engine
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ForbiddenError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.middleware.auth_middleware import Principal
 from app.repositories.agent_invocation_repo import AgentInvocationRepo
 from app.schemas.agent import AgentInvocationOut, InvokeRequest, InvokeResponse
@@ -27,6 +27,7 @@ def _identity(principal: Principal) -> tuple[uuid.UUID | None, uuid.UUID | None,
 
 
 @router.post("", response_model=InvokeResponse)
+@log_method(logger)
 async def invoke_agent(
     body: InvokeRequest,
     request: Request,
@@ -106,6 +107,7 @@ async def invoke_agent(
 
 
 @router.get("", response_model=list[AgentInvocationOut])
+@log_method(logger)
 async def list_agent_invocations(
     principal: Principal = Depends(get_current_principal),
     repo: AgentInvocationRepo = Depends(get_agent_invocation_repo),

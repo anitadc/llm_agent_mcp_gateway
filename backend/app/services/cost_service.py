@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.repositories.model_pricing_repo import ModelPricingRepo
 
 logger = get_logger(__name__)
@@ -14,6 +14,7 @@ class CostService:
     def __init__(self, pricing_repo: ModelPricingRepo) -> None:
         self.pricing_repo = pricing_repo
 
+    @log_method(logger)
     async def calculate(self, prompt_tokens: int, completion_tokens: int, provider: str | None, model: str | None) -> Decimal:
         if not provider or not model:
             logger.warning("cost_calculation_skipped", reason="missing_provider_or_model", provider=provider, model=model)

@@ -10,7 +10,7 @@ from app.api.deps import (
     require_roles,
 )
 from app.core.exceptions import NotFoundError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import UserRole
 from app.db.models.user import User
 from app.repositories.agent_approval_task_repo import AgentApprovalTaskRepo
@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 
 
 @router.get("", response_model=list[AgentOut])
+@log_method(logger)
 async def list_agents(
     user: User = Depends(require_roles(UserRole.admin)), repo: AgentRepo = Depends(get_agent_repo)
 ) -> list[AgentOut]:
@@ -33,6 +34,7 @@ async def list_agents(
 
 
 @router.post("", response_model=AgentOut, status_code=201)
+@log_method(logger)
 async def register_agent(
     body: AgentCreate,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -44,6 +46,7 @@ async def register_agent(
 
 
 @router.get("/{agent_id}", response_model=AgentOut)
+@log_method(logger)
 async def get_agent(
     agent_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -57,6 +60,7 @@ async def get_agent(
 
 
 @router.patch("/{agent_id}", response_model=AgentOut)
+@log_method(logger)
 async def update_agent(
     agent_id: uuid.UUID,
     body: AgentUpdate,
@@ -73,6 +77,7 @@ async def update_agent(
 
 
 @router.get("/{agent_id}/agent-card")
+@log_method(logger)
 async def get_agent_card(
     agent_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -86,6 +91,7 @@ async def get_agent_card(
 
 
 @router.post("/{agent_id}/submit", response_model=list[AgentApprovalTaskOut])
+@log_method(logger)
 async def submit_agent_for_approval(
     agent_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -103,6 +109,7 @@ async def submit_agent_for_approval(
 
 
 @router.get("/{agent_id}/approvals", response_model=list[AgentApprovalTaskOut])
+@log_method(logger)
 async def list_agent_approvals(
     agent_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -114,6 +121,7 @@ async def list_agent_approvals(
 
 
 @router.post("/{agent_id}/publish", response_model=AgentOut)
+@log_method(logger)
 async def publish_agent(
     agent_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -129,6 +137,7 @@ async def publish_agent(
 
 
 @router.post("/{agent_id}/suspend", response_model=AgentOut)
+@log_method(logger)
 async def suspend_agent(
     agent_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -144,6 +153,7 @@ async def suspend_agent(
 
 
 @router.post("/{agent_id}/reactivate", response_model=AgentOut)
+@log_method(logger)
 async def reactivate_agent(
     agent_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -159,6 +169,7 @@ async def reactivate_agent(
 
 
 @router.post("/{agent_id}/deprecate", response_model=AgentOut)
+@log_method(logger)
 async def deprecate_agent(
     agent_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -174,6 +185,7 @@ async def deprecate_agent(
 
 
 @router.post("/{agent_id}/retire", response_model=AgentOut)
+@log_method(logger)
 async def retire_agent(
     agent_id: uuid.UUID,
     user: User = Depends(require_roles(UserRole.admin)),
@@ -192,6 +204,7 @@ approvals_router = APIRouter(prefix="/v1/agent-approvals", tags=["agent_gateway"
 
 
 @approvals_router.get("", response_model=list[AgentApprovalTaskOut])
+@log_method(logger)
 async def list_pending_approvals(
     user: User = Depends(require_roles(UserRole.admin)),
     task_repo: AgentApprovalTaskRepo = Depends(get_agent_approval_task_repo),
@@ -202,6 +215,7 @@ async def list_pending_approvals(
 
 
 @approvals_router.post("/{task_id}/approve", response_model=AgentApprovalTaskOut)
+@log_method(logger)
 async def approve_task(
     task_id: uuid.UUID,
     body: ApprovalDecisionRequest,
@@ -218,6 +232,7 @@ async def approve_task(
 
 
 @approvals_router.post("/{task_id}/reject", response_model=AgentApprovalTaskOut)
+@log_method(logger)
 async def reject_task(
     task_id: uuid.UUID,
     body: ApprovalDecisionRequest,

@@ -1,6 +1,6 @@
 import uuid
 
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.db.models.mcp_session import McpSession
 from app.repositories.mcp_session_repo import McpSessionRepo
 
@@ -15,6 +15,7 @@ class SessionManager:
     def __init__(self, session_repo: McpSessionRepo) -> None:
         self.session_repo = session_repo
 
+    @log_method(logger)
     async def get_or_create(
         self,
         client_session_id: str | None,
@@ -35,13 +36,16 @@ class SessionManager:
         logger.info("mcp_client_session_created", client_session_id=created.client_session_id)
         return created, True
 
+    @log_method(logger)
     async def get(self, client_session_id: str) -> McpSession | None:
         return await self.session_repo.get_by_client_session_id(client_session_id)
 
     @staticmethod
+    @log_method(logger)
     def get_server_session_id(session: McpSession, server_id: uuid.UUID) -> str | None:
         return session.server_sessions.get(str(server_id))
 
+    @log_method(logger)
     async def record_server_session(
         self, session: McpSession, server_id: uuid.UUID, server_session_id: str | None
     ) -> None:

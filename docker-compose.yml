@@ -153,11 +153,11 @@ services:
       valkey:
         condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
       guardrails-mock:
-        condition: service_started
+        condition: service_healthy
       infisical:
-        condition: service_started
+        condition: service_healthy
 
   gateway-frontend:
     build:
