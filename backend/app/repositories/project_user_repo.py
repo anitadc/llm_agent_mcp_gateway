@@ -2,13 +2,17 @@ import uuid
 
 from sqlalchemy import select
 
+from app.core.logging import get_logger, log_method
 from app.db.models.project_user import ProjectUser
 from app.repositories.base import BaseRepository
+
+logger = get_logger(__name__)
 
 
 class ProjectUserRepo(BaseRepository[ProjectUser]):
     model = ProjectUser
 
+    @log_method(logger)
     async def list_memberships(
         self, project_id: uuid.UUID | None = None, user_id: uuid.UUID | None = None
     ) -> list[ProjectUser]:

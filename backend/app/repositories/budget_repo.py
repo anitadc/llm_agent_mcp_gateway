@@ -2,13 +2,17 @@ import uuid
 
 from sqlalchemy import select
 
+from app.core.logging import get_logger, log_method
 from app.db.models.budget import Budget
 from app.repositories.base import BaseRepository
+
+logger = get_logger(__name__)
 
 
 class BudgetRepo(BaseRepository[Budget]):
     model = Budget
 
+    @log_method(logger)
     async def list_visible(
         self, organization_id: uuid.UUID | None = None, project_id: uuid.UUID | None = None
     ) -> list[Budget]:

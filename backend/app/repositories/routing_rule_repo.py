@@ -2,14 +2,18 @@ import uuid
 
 from sqlalchemy import or_, select
 
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import ModelCapability
 from app.db.models.routing_rule import RoutingRule
 from app.repositories.base import BaseRepository
+
+logger = get_logger(__name__)
 
 
 class RoutingRuleRepo(BaseRepository[RoutingRule]):
     model = RoutingRule
 
+    @log_method(logger)
     async def find_best_match(
         self,
         model_alias: str,
@@ -43,6 +47,7 @@ class RoutingRuleRepo(BaseRepository[RoutingRule]):
         candidates.sort(key=lambda rule: (specificity(rule), rule.priority), reverse=True)
         return candidates[0]
 
+    @log_method(logger)
     async def list_all(self) -> list[RoutingRule]:
         result = await self.db.execute(select(RoutingRule))
         return list(result.scalars().all())

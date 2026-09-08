@@ -4,13 +4,17 @@ from decimal import Decimal
 
 from sqlalchemy import func, select
 
+from app.core.logging import get_logger, log_method
 from app.db.models.cost_ledger import CostLedger
 from app.repositories.base import BaseRepository
+
+logger = get_logger(__name__)
 
 
 class CostLedgerRepo(BaseRepository[CostLedger]):
     model = CostLedger
 
+    @log_method(logger)
     async def sum_cost(
         self,
         organization_id: uuid.UUID | None = None,

@@ -4,14 +4,18 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import RequestStatus
 from app.db.models.request_log import RequestLog
 from app.repositories.base import BaseRepository
+
+logger = get_logger(__name__)
 
 
 class RequestLogRepo(BaseRepository[RequestLog]):
     model = RequestLog
 
+    @log_method(logger)
     async def get_by_request_id(self, request_id: uuid.UUID) -> RequestLog | None:
         stmt = (
             select(RequestLog)
@@ -21,6 +25,7 @@ class RequestLogRepo(BaseRepository[RequestLog]):
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
+    @log_method(logger)
     async def list_paginated(
         self,
         organization_id: uuid.UUID | None = None,
@@ -59,6 +64,7 @@ class RequestLogRepo(BaseRepository[RequestLog]):
         items = list((await self.db.execute(stmt)).scalars().all())
         return items, total
 
+    @log_method(logger)
     async def get_latency_p50_ms(
         self,
         provider: str,

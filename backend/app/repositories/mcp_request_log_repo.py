@@ -3,14 +3,18 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 
+from app.core.logging import get_logger, log_method
 from app.db.models.enums import RequestStatus
 from app.db.models.mcp_request_log import McpRequestLog
 from app.repositories.base import BaseRepository
+
+logger = get_logger(__name__)
 
 
 class McpRequestLogRepo(BaseRepository[McpRequestLog]):
     model = McpRequestLog
 
+    @log_method(logger)
     async def stats_for_server(self, server_id: uuid.UUID, window_minutes: int = 60) -> dict:
         """Per-server usage/failure counts for the Server Health Monitor page,
         derived from mcp_request_logs rather than a separate counter table."""

@@ -3,19 +3,24 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from app.core.logging import get_logger, log_method
 from app.db.models.api_key import ApiKey
 from app.repositories.base import BaseRepository
+
+logger = get_logger(__name__)
 
 
 class ApiKeyRepo(BaseRepository[ApiKey]):
     model = ApiKey
 
+    @log_method(logger)
     async def get_by_hashed_key(self, hashed_key: str) -> ApiKey | None:
         result = await self.db.execute(
             select(ApiKey).where(ApiKey.hashed_key == hashed_key, ApiKey.is_active.is_(True))
         )
         return result.scalar_one_or_none()
 
+    @log_method(logger)
     async def list_visible(self, project_id: uuid.UUID | None = None) -> list[ApiKey]:
         stmt = select(ApiKey)
         if project_id is not None:
@@ -23,10 +28,12 @@ class ApiKeyRepo(BaseRepository[ApiKey]):
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
+    @log_method(logger)
     async def touch_last_used(self, api_key: ApiKey) -> None:
         api_key.last_used_at = datetime.now(timezone.utc)
         await self.db.flush()
 
+    @log_method(logger)
     async def revoke(self, api_key: ApiKey) -> None:
         api_key.is_active = False
         api_key.revoked_at = datetime.now(timezone.utc)

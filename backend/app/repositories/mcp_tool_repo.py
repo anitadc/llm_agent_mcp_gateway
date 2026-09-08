@@ -3,12 +3,15 @@ import uuid
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import selectinload
 
+from app.core.logging import get_logger, log_method
 from app.db.models.api_endpoint import ApiEndpoint
 from app.db.models.api_service import ApiService
 from app.db.models.enums import ApiServiceStatus, McpHealthStatus, McpServerStatus, McpToolSourceType
 from app.db.models.mcp_server import McpServer
 from app.db.models.mcp_tool import McpTool
 from app.repositories.base import BaseRepository
+
+logger = get_logger(__name__)
 
 _EAGER_LOAD = (
     selectinload(McpTool.server),
@@ -33,24 +36,29 @@ _AVAILABLE = McpTool.enabled.is_(True) & or_(
 class McpToolRepo(BaseRepository[McpTool]):
     model = McpTool
 
+    @log_method(logger)
     async def get(self, id: uuid.UUID) -> McpTool | None:
         result = await self.db.execute(select(McpTool).options(*_EAGER_LOAD).where(McpTool.id == id))
         return result.scalar_one_or_none()
 
+    @log_method(logger)
     async def get_by_name(self, name: str) -> McpTool | None:
         result = await self.db.execute(select(McpTool).options(*_EAGER_LOAD).where(McpTool.name == name))
         return result.scalar_one_or_none()
 
+    @log_method(logger)
     async def list_by_server(self, server_id: uuid.UUID) -> list[McpTool]:
         result = await self.db.execute(select(McpTool).where(McpTool.server_id == server_id))
         return list(result.scalars().all())
 
+    @log_method(logger)
     async def list_by_api_service(self, api_service_id: uuid.UUID) -> list[McpTool]:
         result = await self.db.execute(
             select(McpTool).join(McpTool.api_endpoint).where(ApiEndpoint.api_service_id == api_service_id)
         )
         return list(result.scalars().all())
 
+    @log_method(logger)
     async def search(self, query: str | None, only_available: bool = False) -> list[McpTool]:
         """`only_available` applies the registry's routing gate at the SQL level
         (tool enabled, target available -- MCP server active+healthy, or REST API
