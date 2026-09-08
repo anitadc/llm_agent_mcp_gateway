@@ -4,7 +4,7 @@ from backend.app.identity.local_token import issue_local_jwt
 import jwt
 
 from app.core.exceptions import AuthError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.core.config import Settings
 from app.identity.base import IdentityProvider
 from app.identity.models import UserIdentity
@@ -31,6 +31,7 @@ class LocalProvider(IdentityProvider):
 
         self.settings = settings
 
+    @log_method(logger)
     async def validate_token(self, token: str) -> dict[str, Any]:
         if not self.settings.jwt_secret:
             raise AuthError("Local JWT validation not configured")
@@ -41,6 +42,7 @@ class LocalProvider(IdentityProvider):
             logger.warning("local_token_validation_failed", error=str(exc))
             raise AuthError("Invalid local token") from exc
 
+    @log_method(logger)
     async def get_user_info(self, token: str) -> dict[str, Any]:
         claims = await self.validate_token(token)
         return {
@@ -50,11 +52,13 @@ class LocalProvider(IdentityProvider):
             "attributes": {k: v for k, v in claims.items() if k not in {"sub", "email", "iat", "exp", "roles", "groups", "tenant_id"}},
         }
 
+    @log_method(logger)
     async def get_roles(self, token: str) -> list[str]:
         claims = await self.validate_token(token)
         roles = claims.get("roles") or []
         return roles if isinstance(roles, list) else [str(roles)]
 
+    @log_method(logger)
     async def get_groups(self, token: str) -> list[str]:
         claims = await self.validate_token(token)
         groups = claims.get("groups") or []

@@ -3,7 +3,7 @@ from typing import Any
 import jwt
 
 from app.core.config import Settings, get_settings
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.identity.base import IdentityProvider
 
 logger = get_logger(__name__)
@@ -50,6 +50,7 @@ def _build_provider(name: str, settings: Settings) -> IdentityProvider:
     raise ValueError(f"Unknown IDENTITY_PROVIDER '{name}'")
 
 
+@log_method(logger)
 def get_identity_provider(settings: Settings | None = None) -> IdentityProvider:
     """The default, single-tenant path: whichever provider IDENTITY_PROVIDER
     selects. See build_provider_from_tenant_config for the multi-tenant path."""
@@ -57,6 +58,7 @@ def get_identity_provider(settings: Settings | None = None) -> IdentityProvider:
     return _build_provider(settings.identity_provider, settings)
 
 
+@log_method(logger)
 def build_provider_from_tenant_config(provider_name: str, configuration: dict[str, Any], settings: Settings) -> IdentityProvider:
     """Multi-tenant path (see docs/identity-provider-architecture.md): builds a
     one-off provider from a `tenant_identity_config` row's stored
@@ -69,6 +71,7 @@ def build_provider_from_tenant_config(provider_name: str, configuration: dict[st
     return _build_provider(provider_name, overridden)
 
 
+@log_method(logger)
 def peek_unverified_issuer(token: str) -> str | None:
     """Reads the `iss` claim WITHOUT verifying the signature. Used only to
     decide which tenant's IdentityProvider should attempt real,
@@ -83,6 +86,7 @@ def peek_unverified_issuer(token: str) -> str | None:
         return None
 
 
+@log_method(logger)
 def is_provider_available(name: str, settings: Settings) -> bool:
     """Static config-presence check (NOT a live connectivity probe) -- just
     enough for the admin UI to show which providers this deployment is even
@@ -102,6 +106,7 @@ def is_provider_available(name: str, settings: Settings) -> bool:
     return False
 
 
+@log_method(logger)
 def list_provider_metadata(settings: Settings | None = None) -> list[dict]:
     settings = settings or get_settings()
     return [{"name": name, "available": is_provider_available(name, settings)} for name in PROVIDER_NAMES]

@@ -6,7 +6,7 @@ import httpx
 import jwt
 
 from app.core.exceptions import AuthError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_method
 from app.identity.models import UserIdentity
 
 logger = get_logger(__name__)
@@ -17,6 +17,7 @@ def _jwks_client(jwks_url: str) -> jwt.PyJWKClient:
     return jwt.PyJWKClient(jwks_url)
 
 
+@log_method(logger)
 def validate_oidc_jwt(token: str, *, jwks_url: str, issuer: str | None, audience: str | None) -> dict[str, Any]:
     """Shared signature/issuer/audience/expiry validation for every OIDC-based
     provider (Keycloak, Entra ID, Auth0, Okta, Google, and AWS IAM Identity
@@ -98,6 +99,7 @@ class IdentityProvider(ABC):
     async def get_groups(self, token: str) -> list[str]:
         ...
 
+    @log_method(logger)
     async def get_user_identity(self, token: str) -> UserIdentity:
         """Composes the four provider-specific primitives above into the
         provider-agnostic UserIdentity. Concrete, not abstract -- every

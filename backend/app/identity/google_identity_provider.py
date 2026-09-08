@@ -21,6 +21,7 @@ class GoogleIdentityProvider(IdentityProvider):
         self._audience = settings.google_client_id
         self._workspace_domain = settings.google_workspace_domain
 
+    @log_method(logger)
     async def validate_token(self, token: str) -> dict[str, Any]:
         claims = validate_oidc_jwt(token, jwks_url=self._jwks_url, issuer=self._issuer, audience=self._audience)
         if self._workspace_domain and claims.get("hd") != self._workspace_domain:
@@ -32,6 +33,7 @@ class GoogleIdentityProvider(IdentityProvider):
             raise AuthError(f"Google account is not a member of the required workspace domain '{self._workspace_domain}'")
         return claims
 
+    @log_method(logger)
     async def get_user_info(self, token: str) -> dict[str, Any]:
         claims = await self.validate_token(token)
         return {
@@ -41,6 +43,7 @@ class GoogleIdentityProvider(IdentityProvider):
             "attributes": {"name": claims.get("name")},
         }
 
+    @log_method(logger)
     async def get_roles(self, token: str) -> list[str]:
         # A plain Google ID token carries no roles claim -- Workspace role/org
         # unit assignment lives behind the Admin SDK Directory API, which this
@@ -48,6 +51,7 @@ class GoogleIdentityProvider(IdentityProvider):
         await self.validate_token(token)
         return []
 
+    @log_method(logger)
     async def get_groups(self, token: str) -> list[str]:
         # Same reasoning as get_roles: Workspace group membership requires an
         # Admin SDK Directory API call, not carried in the ID token itself.

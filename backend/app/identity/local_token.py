@@ -4,8 +4,12 @@ from typing import Any
 import jwt
 
 from app.core.config import Settings
+from app.core.logging import get_logger, log_method
+
+logger = get_logger(__name__)
 
 
+@log_method(logger)
 def issue_local_jwt(settings: Settings, *, user_id: str, email: str, roles: list[str] | None = None, groups: list[str] | None = None, tenant_id: str | None = None, expires_seconds: int = 3600) -> tuple[str, int]:
     """Issues a HS256-signed JWT using `settings.jwt_secret`.
 

@@ -1,7 +1,10 @@
 from typing import Any
 
 from app.core.config import Settings
+from app.core.logging import get_logger, log_method
 from app.identity.base import IdentityProvider, validate_oidc_jwt
+
+logger = get_logger(__name__)
 
 
 class Auth0Provider(IdentityProvider):
@@ -21,9 +24,11 @@ class Auth0Provider(IdentityProvider):
         self._roles_claim = settings.auth0_roles_claim
         self._groups_claim = settings.auth0_groups_claim
 
+    @log_method(logger)
     async def validate_token(self, token: str) -> dict[str, Any]:
         return validate_oidc_jwt(token, jwks_url=self._jwks_url, issuer=self._issuer, audience=self._audience)
 
+    @log_method(logger)
     async def get_user_info(self, token: str) -> dict[str, Any]:
         claims = await self.validate_token(token)
         return {
@@ -35,10 +40,12 @@ class Auth0Provider(IdentityProvider):
             "attributes": {"nickname": claims.get("nickname")},
         }
 
+    @log_method(logger)
     async def get_roles(self, token: str) -> list[str]:
         claims = await self.validate_token(token)
         return list(claims.get(self._roles_claim, []))
 
+    @log_method(logger)
     async def get_groups(self, token: str) -> list[str]:
         claims = await self.validate_token(token)
         return list(claims.get(self._groups_claim, []))

@@ -1,7 +1,10 @@
 from typing import Any
 
 from app.core.config import Settings
+from app.core.logging import get_logger, log_method
 from app.identity.base import IdentityProvider, validate_oidc_jwt
+
+logger = get_logger(__name__)
 
 
 class KeycloakProvider(IdentityProvider):
@@ -19,9 +22,11 @@ class KeycloakProvider(IdentityProvider):
         self._issuer = f"{settings.keycloak_base_url}/realms/{settings.keycloak_realm}"
         self._audience = settings.keycloak_audience
 
+    @log_method(logger)
     async def validate_token(self, token: str) -> dict[str, Any]:
         return validate_oidc_jwt(token, jwks_url=self._jwks_url, issuer=self._issuer, audience=self._audience)
 
+    @log_method(logger)
     async def get_user_info(self, token: str) -> dict[str, Any]:
         claims = await self.validate_token(token)
         return {
@@ -31,12 +36,14 @@ class KeycloakProvider(IdentityProvider):
             "attributes": {"preferred_username": claims.get("preferred_username")},
         }
 
+    @log_method(logger)
     async def get_roles(self, token: str) -> list[str]:
         claims = await self.validate_token(token)
         realm_roles = set(claims.get("realm_access", {}).get("roles", []))
         client_roles = set(claims.get("resource_access", {}).get(self._client_id, {}).get("roles", []))
         return sorted(realm_roles | client_roles)
 
+    @log_method(logger)
     async def get_groups(self, token: str) -> list[str]:
         claims = await self.validate_token(token)
         return list(claims.get("groups", []))

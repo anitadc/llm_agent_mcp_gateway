@@ -1,7 +1,10 @@
 from typing import Any
 
 from app.core.config import Settings
+from app.core.logging import get_logger, log_method
 from app.identity.base import IdentityProvider, validate_oidc_jwt
+
+logger = get_logger(__name__)
 
 
 class AWSIdentityProvider(IdentityProvider):
@@ -29,9 +32,11 @@ class AWSIdentityProvider(IdentityProvider):
         # providers do; there is nothing generically correct to check here.
         self._audience = None
 
+    @log_method(logger)
     async def validate_token(self, token: str) -> dict[str, Any]:
         return validate_oidc_jwt(token, jwks_url=self._jwks_url, issuer=self._issuer, audience=self._audience)
 
+    @log_method(logger)
     async def get_user_info(self, token: str) -> dict[str, Any]:
         claims = await self.validate_token(token)
         return {
@@ -41,10 +46,12 @@ class AWSIdentityProvider(IdentityProvider):
             "attributes": {},
         }
 
+    @log_method(logger)
     async def get_roles(self, token: str) -> list[str]:
         claims = await self.validate_token(token)
         return list(claims.get("roles", []))
 
+    @log_method(logger)
     async def get_groups(self, token: str) -> list[str]:
         claims = await self.validate_token(token)
         return list(claims.get("groups", []))
