@@ -11,7 +11,26 @@ class Settings(BaseSettings):
     environment: Literal["local", "staging", "prod"] = "local"
     log_level: str = "DEBUG"
 
-    database_url: str
+    database_schema: str | None = None
+    database_url: str | None = None
+
+    # @field_validator("database_url", mode="before")
+    # @classmethod
+    # def normalize_database_url(cls, value, info):
+    #     if value is None:
+    #         return value
+
+    #     url = str(value).strip()
+    #     if not url:
+    #         return value
+
+    #     schema = (info.data.get("database_schema") or "ai_gateway").strip() or "ai_gateway"
+    #     if "search_path" in url:
+    #         return url
+
+    #     separator = "&" if "?" in url else "?"
+    #     encoded_schema = schema.replace(" ", "").replace(",", "%2C")
+    #     return f"{url}{separator}options=-c&search_path={encoded_schema}"
 
     valkey_host: str = "localhost"
     valkey_port: int = 6379
@@ -36,11 +55,11 @@ class Settings(BaseSettings):
     # per-tenant identity configuration.
     identity_provider: Literal["keycloak", "entra", "auth0", "okta", "aws_identity", "google", "local"] = "keycloak"
 
-    keycloak_base_url: str
-    keycloak_realm: str
-    keycloak_client_id: str
+    keycloak_base_url: str | None = None
+    keycloak_realm: str | None = None  
+    keycloak_client_id: str | None = None
     keycloak_jwks_url: str = ""
-    keycloak_audience: str
+    keycloak_audience: str | None = None
 
     entra_tenant_id: str | None = None
     entra_client_id: str | None = None
@@ -68,7 +87,7 @@ class Settings(BaseSettings):
     # unset means any Google Account is accepted.
     google_workspace_domain: str | None = None
 
-    guardrails_base_url: str
+    guardrails_base_url: str | None = None
     guardrails_timeout_seconds: float = 5.0
 
     # Non-secret provider config (region isn't a credential); the credentials
@@ -79,7 +98,7 @@ class Settings(BaseSettings):
     aws_region_name: str | None = None
 
     api_key_prefix: str = "gw"
-    api_key_secret_pepper: str
+    api_key_secret_pepper: str | None = None
 
     # Local dev/testing JWT signing key and toggle. When `identity_provider` is
     # intentionally disabled (None) it's convenient to issue signed JWTs from
@@ -108,7 +127,7 @@ class Settings(BaseSettings):
                 return None
         return value
 
-    infisical_site_url: str # = "https://app.infisical.com"
+    infisical_site_url: str | None = None
     infisical_client_id: str | None = None
     infisical_client_secret: str | None = None
     infisical_project_id: str | None = None

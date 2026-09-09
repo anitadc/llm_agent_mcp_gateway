@@ -15,17 +15,22 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+settings = get_settings()
+Base.metadata.schema = settings.database_schema
+
 target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    return get_settings().database_url
+    return settings.database_url
 
 
 def run_migrations_offline() -> None:
     context.configure(
         url=get_url(),
         target_metadata=target_metadata,
+        include_schemas=True,
+        version_table_schema=settings.database_schema,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -34,7 +39,12 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_schemas=True,
+        version_table_schema=settings.database_schema,
+    )
     with context.begin_transaction():
         context.run_migrations()
 

@@ -5,6 +5,7 @@ services:
     image: postgres:16-alpine
     container_name: wn_postgres
     restart: unless-stopped
+    command: ["postgres", "-c", "search_path=ai_gateway"]
     environment:
       POSTGRES_DB: gateway
       POSTGRES_USER: gateway
@@ -13,8 +14,9 @@ services:
       - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - wn_postgres_data:/var/lib/postgresql/data
+      - ./backend/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gateway"]
+      test: ["CMD-SHELL", "pg_isready -U gateway -d gateway"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -82,14 +84,32 @@ services:
     ports:
       - "${INFISICAL_HOST_PORT:-8081}:8080"
 
+  gateway-backend-postgres-data:
+    build: ./backend
+    container_name: wn_gateway_backend_postgres_data
+    restart: unless-stopped
+    command: sh -c "alembic upgrade head"
+    # volumes:
+    #   - wn_postgres_data:/var/lib/postgresql/data
+    #   - ./backend/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+      DATABASE_URL: postgresql+asyncpg://gateway:gateway@postgres:5432/gateway
+      database_schema: ${database_schema:-ai_gateway}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   gateway-backend:
     build: ./backend
     container_name: wn_gateway_backend
     restart: unless-stopped
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level ${LOG_LEVEL:-debug}"
+    # command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level ${LOG_LEVEL:-debug}"
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
       DATABASE_URL: postgresql+asyncpg://gateway:gateway@postgres:5432/gateway
+      database_schema: ${database_schema:-ai_gateway}
       VALKEY_HOST: ${VALKEY_HOST:-valkey}
       VALKEY_PORT: ${VALKEY_PORT:-6379}
       VALKEY_DB: ${VALKEY_DB:-0}
