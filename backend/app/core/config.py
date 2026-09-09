@@ -3,16 +3,22 @@ from typing import Literal
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
+from dotenv import load_dotenv
 
 class Settings(BaseSettings):
+    load_dotenv()
     app_name: str = "llm-gateway"
     environment: Literal["local", "staging", "prod"] = "local"
     log_level: str = "DEBUG"
 
     database_url: str
 
-    valkey_url: str
+    valkey_host: str = "localhost"
+    valkey_port: int = 6379
+    valkey_db: int = 0
+    valkey_user: str | None = None
+    valkey_password: str | None = None
+    valkey_url: str | None = None
     cache_ttl_seconds: int = 300
     rate_limit_window_seconds: int = 60
 
@@ -146,6 +152,27 @@ class Settings(BaseSettings):
     agent_default_rate_limit_per_window: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    @field_validator("valkey_url", mode="before")
+    @classmethod
+    def build_valkey_url(cls, value, info):
+        if value is not None and str(value).strip():
+            return value
+
+        data = info.data
+        host = (data.get("valkey_host") or "localhost").strip() or "localhost"
+        port = data.get("valkey_port") or 6379
+        db = data.get("valkey_db") if data.get("valkey_db") is not None else 0
+        user = (data.get("valkey_user") or "").strip()
+        password = (data.get("valkey_password") or "").strip()
+
+        if user and password:
+            return f"redis://{user}:{password}@{host}:{port}/{db}"
+        if user:
+            return f"redis://{user}@{host}:{port}/{db}"
+        if password:
+            return f"redis://:{password}@{host}:{port}/{db}"
+        return f"redis://{host}:{port}/{db}"
 
     @model_validator(mode="after")
     def derive_jwks_url(self) -> "Settings":

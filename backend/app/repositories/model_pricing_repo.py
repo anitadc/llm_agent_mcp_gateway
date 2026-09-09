@@ -1,4 +1,4 @@
-from backend.app.core.logging import log_method, get_logger
+from app.core.logging import log_method, get_logger
 from sqlalchemy import select
 
 from app.db.models.model_pricing import ModelPricing
