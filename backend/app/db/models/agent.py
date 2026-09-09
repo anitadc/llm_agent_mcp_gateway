@@ -7,7 +7,14 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.db.models.enums import AgentLifecycleStatus, AgentRiskClass, AgentTrustLevel
+from app.db.models.enums import (
+    AgentHealthStatus,
+    AgentLifecycleStatus,
+    AgentProtocol,
+    AgentRiskClass,
+    AgentTrustLevel,
+    AgentVisibility,
+)
 
 if TYPE_CHECKING:
     from app.db.models.agent_approval_task import AgentApprovalTask
@@ -55,10 +62,19 @@ class Agent(Base):
         default=AgentLifecycleStatus.draft,
     )
 
-    # REMOTE_HTTP invocation target -- the only execution mode implemented today
-    # (A2A remote invocation and the LangGraph same-process boundary are Future
-    # Capability; see docs/agent-gateway.md). Required before an agent can publish.
+    # REMOTE_HTTP invocation target. `protocol` selects the wire format
+    # AgentInvocationService._dispatch uses against it -- `remote_http` (default,
+    # every pre-existing agent) sends this app's own {"operation","payload"} JSON;
+    # `a2a` sends an Agent2Agent-protocol JSON-RPC 2.0 envelope instead. Real A2A
+    # remote invocation via that mode and the LangGraph same-process boundary are
+    # otherwise still evolving (see docs/agent-gateway.md). endpoint_url is
+    # required before an agent can publish either way.
     endpoint_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    protocol: Mapped[AgentProtocol] = mapped_column(
+        Enum(AgentProtocol, name="agent_protocol", values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=AgentProtocol.remote_http,
+    )
     # {"type": "none"|"bearer"|"api_key", "credential_ref": "SECRET_NAME", "header_name": "X-API-Key"}
     # credential_ref is resolved through the Secret Provider layer at invocation
     # time, never stored here -- mirrors ApiService.auth_config.
@@ -68,6 +84,37 @@ class Agent(Base):
     # see docs/agent-gateway.md's scope notes): free-form provider/skills/modality
     # metadata surfaced via GET /v1/agents/{id}/agent-card.
     card: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # Marketplace visibility. `published` is the default so every agent that
+    # existed before this field was added keeps its exact current behavior
+    # (invocable by any caller that clears PolicyEngine, from anywhere). `private`
+    # additionally requires project_id and an agent_project_enablements row for
+    # the caller's project -- see AgentRepo.list_by_capability.
+    visibility: Mapped[AgentVisibility] = mapped_column(
+        Enum(AgentVisibility, name="agent_visibility", values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=AgentVisibility.published,
+    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
+    # Surfaced to consumers of the catalog once status == deprecated; purely
+    # informational, never enforced.
+    deprecation_notice: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Liveness as observed by the last probe (see
+    # services/agent_gateway/health_checker.py) -- unknown until the first probe.
+    health_status: Mapped[AgentHealthStatus] = mapped_column(
+        Enum(AgentHealthStatus, name="agent_health_status", values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=AgentHealthStatus.unknown,
+    )
+    last_heartbeat: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Incremented once per submit_for_approval call and stamped onto every
+    # AgentApprovalTask it creates, so a rejected-then-resubmitted agent's review
+    # history groups cleanly into rounds instead of one flat undifferentiated list.
+    current_submission_round: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     submitted_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

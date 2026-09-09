@@ -11,6 +11,7 @@ from app.db.models.enums import (
     SecretAuditStatus,
     SecretOperation,
 )
+from app.db.models.agent_audit_log import AgentAuditLog
 from app.db.models.agent_invocation import AgentInvocation
 from app.db.models.guardrail_result import GuardrailResult
 from app.db.models.mcp_request_log import McpRequestLog
@@ -154,6 +155,7 @@ async def record_agent_invocation(
     authorization_decision: str,
     status: RequestStatus,
     latency_ms: int,
+    cost_usd: Decimal | None = None,
 ) -> None:
     """Runs as a FastAPI BackgroundTask -- same convention as record_mcp_request:
     its own DB session, after the response has already been sent."""
@@ -171,11 +173,34 @@ async def record_agent_invocation(
                     authorization_decision=authorization_decision,
                     status=status,
                     latency_ms=latency_ms,
+                    cost_usd=cost_usd,
                 )
             )
             await session.commit()
         except Exception:
             logger.exception("record_agent_invocation_failed", request_id=str(request_id), status=status.value)
+            raise
+
+
+async def record_agent_audit(
+    *,
+    agent_id: uuid.UUID | None,
+    action: str,
+    actor_user_id: uuid.UUID | None,
+    details: dict | None = None,
+) -> None:
+    """Runs as a FastAPI BackgroundTask -- same convention as record_secret_audit.
+    Closes the "only secrets get an audit trail" gap for the Agent Registry:
+    who registered/edited/submitted/approved/rejected/published/suspended/
+    deprecated/retired which agent, and when."""
+    async with async_session_factory() as session:
+        try:
+            session.add(
+                AgentAuditLog(agent_id=agent_id, action=action, actor_user_id=actor_user_id, details=details or {})
+            )
+            await session.commit()
+        except Exception:
+            logger.exception("record_agent_audit_failed", agent_id=str(agent_id) if agent_id else None, action=action)
             raise
 
 

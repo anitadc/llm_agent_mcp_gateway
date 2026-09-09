@@ -1,7 +1,11 @@
 from app.db.models.access_policy import AccessPolicy
 from app.db.models.agent import Agent
+from app.db.models.agent_approval_comment import AgentApprovalComment
 from app.db.models.agent_approval_task import AgentApprovalTask
+from app.db.models.agent_audit_log import AgentAuditLog
 from app.db.models.agent_invocation import AgentInvocation
+from app.db.models.agent_pricing import AgentPricing
+from app.db.models.agent_project_enablement import AgentProjectEnablement
 from app.db.models.api_endpoint import ApiEndpoint
 from app.db.models.api_key import ApiKey
 from app.db.models.api_service import ApiService
@@ -27,8 +31,12 @@ from app.db.models.user import User
 __all__ = [
     "AccessPolicy",
     "Agent",
+    "AgentApprovalComment",
     "AgentApprovalTask",
+    "AgentAuditLog",
     "AgentInvocation",
+    "AgentPricing",
+    "AgentProjectEnablement",
     "ApiEndpoint",
     "ApiKey",
     "ApiService",

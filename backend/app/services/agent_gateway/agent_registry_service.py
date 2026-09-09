@@ -1,9 +1,12 @@
+import uuid
 from typing import Any
 
-from app.core.exceptions import BadRequestError
+from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.logging import get_logger
 from app.db.models.agent import Agent
-from app.db.models.enums import AgentLifecycleStatus
+from app.db.models.agent_project_enablement import AgentProjectEnablement
+from app.db.models.enums import AgentLifecycleStatus, AgentVisibility
+from app.repositories.agent_project_enablement_repo import AgentProjectEnablementRepo
 from app.repositories.agent_repo import AgentRepo
 from app.services.agent_gateway import lifecycle
 
@@ -34,8 +37,9 @@ class AgentRegistryService:
     agent get approved" don't end up in one file, mirroring how DiscoveryService
     and ApiRegistryService are split from the MCP/API Registry proper."""
 
-    def __init__(self, agent_repo: AgentRepo) -> None:
+    def __init__(self, agent_repo: AgentRepo, enablement_repo: AgentProjectEnablementRepo | None = None) -> None:
         self.agent_repo = agent_repo
+        self.enablement_repo = enablement_repo
 
     async def register(self, **fields: Any) -> Agent:
         if await self.agent_repo.get_by_key(fields["agent_key"]) is not None:
@@ -98,17 +102,53 @@ class AgentRegistryService:
         logger.info("agent_retired", agent_key=agent.agent_key)
         return agent
 
+    async def enable_for_project(self, agent: Agent, project_id: uuid.UUID, enabled_by_user_id: uuid.UUID) -> None:
+        """Opts a project in to a `private`-visibility agent -- a no-op (but not
+        an error) for a `published` agent, which every project can already use."""
+        if self.enablement_repo is None:
+            raise BadRequestError("Project enablement is not available on this AgentRegistryService instance")
+        if agent.visibility != AgentVisibility.private:
+            return
+        existing = await self.enablement_repo.get_by_agent_and_project(agent.id, project_id)
+        if existing is not None:
+            return
+        await self.enablement_repo.add(
+            AgentProjectEnablement(agent_id=agent.id, project_id=project_id, enabled_by_user_id=enabled_by_user_id)
+        )
+        logger.info("agent_enabled_for_project", agent_key=agent.agent_key, project_id=str(project_id))
+
+    async def disable_for_project(self, agent: Agent, project_id: uuid.UUID) -> None:
+        if self.enablement_repo is None:
+            raise BadRequestError("Project enablement is not available on this AgentRegistryService instance")
+        existing = await self.enablement_repo.get_by_agent_and_project(agent.id, project_id)
+        if existing is None:
+            raise NotFoundError("This project does not have this agent enabled")
+        await self.enablement_repo.delete(existing)
+        logger.info("agent_disabled_for_project", agent_key=agent.agent_key, project_id=str(project_id))
+
     @staticmethod
     def build_agent_card(agent: Agent) -> dict[str, Any]:
-        """A simplified Agent Card -- NOT the official A2A schema (Future
-        Capability). Governed fields always win over whatever a registrant put
-        in the free-form `card` JSON, and auth_config/credential_ref is never
+        """An Agent Card shaped after the Agent2Agent (A2A) protocol's fields
+        (skills/capabilities/provider/url) without claiming full compliance with
+        its official JSON Schema (Future Capability -- see docs/agent-gateway.md).
+        Governed fields always win over whatever a registrant put in the
+        free-form `card` JSON, and auth_config/credential_ref is never
         included -- an Agent Card must never expose a secret reference."""
-        return {
+        card = {
             **agent.card,
             "name": agent.name,
             "description": agent.description,
             "version": agent.version,
-            "capabilities": agent.capabilities,
+            "url": agent.endpoint_url,
             "provider": {"organization": agent.owner_team, "domain": agent.domain},
+            "capabilities": {"streaming": agent.protocol.value == "a2a", "pushNotifications": False},
+            "skills": [
+                {"id": capability, "name": capability, "tags": [agent.domain] if agent.domain else []}
+                for capability in agent.capabilities
+            ],
+            "defaultInputModes": ["application/json"],
+            "defaultOutputModes": ["application/json"],
         }
+        if agent.status == AgentLifecycleStatus.deprecated and agent.deprecation_notice:
+            card["deprecationNotice"] = agent.deprecation_notice
+        return card

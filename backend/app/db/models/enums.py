@@ -174,3 +174,36 @@ class AgentApprovalDecision(str, enum.Enum):
     pending = "pending"
     approved = "approved"
     rejected = "rejected"
+
+
+class AgentVisibility(str, enum.Enum):
+    """Marketplace visibility. `published` (the default, matching every agent's
+    de facto behavior before this field existed) is invocable by any caller
+    that clears the PolicyEngine gate, same as today. `private` additionally
+    requires the caller's project to appear in agent_project_enablements --
+    see repositories/agent_repo.py's list_by_capability."""
+
+    private = "private"
+    published = "published"
+
+
+class AgentProtocol(str, enum.Enum):
+    """Which wire format AgentInvocationService._dispatch uses to call
+    Agent.endpoint_url. `remote_http` (the default) is this app's own
+    pre-existing {"operation", "payload"} JSON convention -- every agent
+    registered before this field existed keeps working unchanged. `a2a` opts
+    an agent into the Agent2Agent protocol's JSON-RPC 2.0 envelope."""
+
+    remote_http = "remote_http"
+    a2a = "a2a"
+
+
+class AgentHealthStatus(str, enum.Enum):
+    """Liveness as observed by the last probe (see
+    services/agent_gateway/health_checker.py) -- unknown until the first probe
+    has run. A separate enum from McpHealthStatus (not a shared one) so the
+    Agent Gateway's own migration/schema never couples to the MCP Gateway's."""
+
+    unknown = "unknown"
+    healthy = "healthy"
+    unhealthy = "unhealthy"

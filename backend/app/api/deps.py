@@ -12,8 +12,12 @@ from app.db.models.user import User
 from app.db.session import get_db
 from app.db.valkey import valkey_client
 from app.middleware.auth_middleware import Principal
+from app.repositories.agent_approval_comment_repo import AgentApprovalCommentRepo
 from app.repositories.agent_approval_task_repo import AgentApprovalTaskRepo
+from app.repositories.agent_audit_log_repo import AgentAuditLogRepo
 from app.repositories.agent_invocation_repo import AgentInvocationRepo
+from app.repositories.agent_pricing_repo import AgentPricingRepo
+from app.repositories.agent_project_enablement_repo import AgentProjectEnablementRepo
 from app.repositories.agent_repo import AgentRepo
 from app.repositories.api_endpoint_repo import ApiEndpointRepo
 from app.repositories.api_key_repo import ApiKeyRepo
@@ -40,6 +44,7 @@ from app.secrets.factory import get_secret_provider
 from app.secrets.service import SecretService
 from app.services.agent_gateway.agent_registry_service import AgentRegistryService
 from app.services.agent_gateway.approval_service import ApprovalService
+from app.services.agent_gateway.health_checker import AgentHealthChecker
 from app.services.agent_gateway.invocation_service import AgentInvocationService
 from app.services.api_registry.api_registry_service import ApiRegistryService
 from app.services.api_registry.rest_executor import RestExecutor
@@ -282,21 +287,50 @@ def get_agent_invocation_repo(db: AsyncSession = Depends(get_db)) -> AgentInvoca
     return AgentInvocationRepo(db)
 
 
-def get_agent_registry_service(agent_repo: AgentRepo = Depends(get_agent_repo)) -> AgentRegistryService:
-    return AgentRegistryService(agent_repo)
+def get_agent_approval_comment_repo(db: AsyncSession = Depends(get_db)) -> AgentApprovalCommentRepo:
+    return AgentApprovalCommentRepo(db)
+
+
+def get_agent_audit_log_repo(db: AsyncSession = Depends(get_db)) -> AgentAuditLogRepo:
+    return AgentAuditLogRepo(db)
+
+
+def get_agent_pricing_repo(db: AsyncSession = Depends(get_db)) -> AgentPricingRepo:
+    return AgentPricingRepo(db)
+
+
+def get_agent_project_enablement_repo(db: AsyncSession = Depends(get_db)) -> AgentProjectEnablementRepo:
+    return AgentProjectEnablementRepo(db)
+
+
+def get_agent_registry_service(
+    agent_repo: AgentRepo = Depends(get_agent_repo),
+    enablement_repo: AgentProjectEnablementRepo = Depends(get_agent_project_enablement_repo),
+) -> AgentRegistryService:
+    return AgentRegistryService(agent_repo, enablement_repo)
 
 
 def get_approval_service(
     agent_repo: AgentRepo = Depends(get_agent_repo),
     task_repo: AgentApprovalTaskRepo = Depends(get_agent_approval_task_repo),
+    comment_repo: AgentApprovalCommentRepo = Depends(get_agent_approval_comment_repo),
     settings: Settings = Depends(get_settings),
 ) -> ApprovalService:
-    return ApprovalService(agent_repo, task_repo, settings.agent_approval_stages)
+    return ApprovalService(agent_repo, task_repo, settings.agent_approval_stages, comment_repo, settings.agent_approval_sla_hours)
+
+
+def get_agent_health_checker(
+    agent_repo: AgentRepo = Depends(get_agent_repo),
+    settings: Settings = Depends(get_settings),
+) -> AgentHealthChecker:
+    return AgentHealthChecker(agent_repo, settings.agent_invocation_timeout_seconds)
 
 
 def get_agent_invocation_service(
     agent_repo: AgentRepo = Depends(get_agent_repo),
     secret_service: SecretService = Depends(get_secret_service),
     settings: Settings = Depends(get_settings),
+    enablement_repo: AgentProjectEnablementRepo = Depends(get_agent_project_enablement_repo),
+    pricing_repo: AgentPricingRepo = Depends(get_agent_pricing_repo),
 ) -> AgentInvocationService:
-    return AgentInvocationService(agent_repo, secret_service, settings)
+    return AgentInvocationService(agent_repo, secret_service, settings, enablement_repo, pricing_repo)

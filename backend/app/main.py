@@ -38,8 +38,12 @@ from app.db.session import async_session_factory
 from app.middleware.auth_middleware import AuthMiddleware
 from app.middleware.rate_limit_middleware import RateLimitMiddleware
 from app.middleware.request_id_middleware import RequestIDMiddleware
+from app.repositories.agent_approval_task_repo import AgentApprovalTaskRepo
+from app.repositories.agent_repo import AgentRepo
 from app.repositories.mcp_server_repo import McpServerRepo
 from app.repositories.mcp_tool_repo import McpToolRepo
+from app.services.agent_gateway.approval_service import ApprovalService
+from app.services.agent_gateway.health_checker import AgentHealthChecker
 from app.services.mcp.discovery_service import DiscoveryService
 from app.services.mcp.health_checker import HealthChecker
 from app.services.mcp.mcp_client import McpClient
@@ -66,6 +70,8 @@ app.add_middleware(RequestIDMiddleware)
 
 _discovery_refresh_task: asyncio.Task | None = None
 _health_check_task: asyncio.Task | None = None
+_agent_health_check_task: asyncio.Task | None = None
+_agent_approval_sla_sweep_task: asyncio.Task | None = None
 
 
 async def _discovery_refresh_loop() -> None:
@@ -103,6 +109,42 @@ async def _health_check_loop() -> None:
             logger.exception("health_check_loop_failed", error=str(exc))
 
 
+async def _agent_health_check_loop() -> None:
+    """Agent Registry analogue of _health_check_loop above -- periodic liveness
+    sweep across every active agent, independent of the manual
+    POST /v1/agents/{id}/health-check trigger."""
+    while True:
+        await asyncio.sleep(settings.agent_health_check_interval_seconds)
+        # Broad catch is deliberate: this loop must survive one bad health-check cycle
+        # and keep running on the next interval rather than dying silently forever.
+        try:
+            async with async_session_factory() as session:
+                health_checker = AgentHealthChecker(AgentRepo(session), settings.agent_invocation_timeout_seconds)
+                await health_checker.check_all()
+                await session.commit()
+        except Exception as exc:
+            logger.exception("agent_health_check_loop_failed", error=str(exc))
+
+
+async def _agent_approval_sla_sweep_loop() -> None:
+    """Flags pending AgentApprovalTasks past their SLA deadline so they're
+    visible (escalated_at + a warning log) instead of silently aging out with
+    no one noticing -- see ApprovalService.escalate_overdue."""
+    while True:
+        await asyncio.sleep(settings.agent_approval_sla_sweep_interval_seconds)
+        # Broad catch is deliberate: this loop must survive one bad sweep cycle and
+        # keep running on the next interval rather than dying silently forever.
+        try:
+            async with async_session_factory() as session:
+                approval = ApprovalService(
+                    AgentRepo(session), AgentApprovalTaskRepo(session), settings.agent_approval_stages
+                )
+                await approval.escalate_overdue()
+                await session.commit()
+        except Exception as exc:
+            logger.exception("agent_approval_sla_sweep_loop_failed", error=str(exc))
+
+
 async def _cancel_task(task: asyncio.Task | None) -> None:
     if task is not None:
         task.cancel()
@@ -112,17 +154,23 @@ async def _cancel_task(task: asyncio.Task | None) -> None:
 
 @app.on_event("startup")
 async def _start_background_tasks() -> None:
-    global _discovery_refresh_task, _health_check_task
+    global _discovery_refresh_task, _health_check_task, _agent_health_check_task, _agent_approval_sla_sweep_task
     if settings.mcp_discovery_refresh_seconds > 0:
         _discovery_refresh_task = asyncio.create_task(_discovery_refresh_loop())
     if settings.mcp_health_check_interval_seconds > 0:
         _health_check_task = asyncio.create_task(_health_check_loop())
+    if settings.agent_health_check_interval_seconds > 0:
+        _agent_health_check_task = asyncio.create_task(_agent_health_check_loop())
+    if settings.agent_approval_sla_sweep_interval_seconds > 0:
+        _agent_approval_sla_sweep_task = asyncio.create_task(_agent_approval_sla_sweep_loop())
 
 
 @app.on_event("shutdown")
 async def _stop_background_tasks() -> None:
     await _cancel_task(_discovery_refresh_task)
     await _cancel_task(_health_check_task)
+    await _cancel_task(_agent_health_check_task)
+    await _cancel_task(_agent_approval_sla_sweep_task)
 
 
 @app.exception_handler(GatewayException)

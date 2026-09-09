@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Text, func
+from sqlalchemy import ARRAY, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -11,6 +11,7 @@ from app.db.models.enums import AgentApprovalDecision, AgentApprovalStage
 
 if TYPE_CHECKING:
     from app.db.models.agent import Agent
+    from app.db.models.agent_approval_comment import AgentApprovalComment
 
 
 class AgentApprovalTask(Base):
@@ -38,6 +39,24 @@ class AgentApprovalTask(Base):
     )
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Optional reviewer restriction: null (the default, and every task created
+    # before this field existed) preserves today's behavior -- any admin may
+    # decide any task. Set, it additionally requires the deciding user to be
+    # this specific user (an admin can still override -- see ApprovalService.decide).
+    assigned_reviewer_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    evidence_links: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)
+    # Which submit_for_approval call created this task -- see
+    # Agent.current_submission_round.
+    submission_round: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     agent: Mapped["Agent"] = relationship(back_populates="approval_tasks", lazy="raise_on_sql")
+    comments: Mapped[list["AgentApprovalComment"]] = relationship(
+        back_populates="task", lazy="raise_on_sql", cascade="all, delete-orphan"
+    )

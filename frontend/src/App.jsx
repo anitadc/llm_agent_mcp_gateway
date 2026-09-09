@@ -4,6 +4,7 @@ import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { useAuth } from "./hooks/useAuth";
 import { AgentApprovals } from "./pages/AgentApprovals";
+import { AgentCatalog } from "./pages/AgentCatalog";
 import { Agents } from "./pages/Agents";
 import { ApiKeys } from "./pages/ApiKeys";
 import { ApiServices } from "./pages/ApiServices";
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/mcp/tools" element={<McpTools />} />
           <Route path="/mcp/playground" element={<McpPlayground />} />
           <Route path="/mcp/sessions" element={<McpSessions />} />
+          <Route path="/agent-catalog" element={<AgentCatalog />} />
 
           <Route element={<ProtectedRoute roles={["admin"]} />}>
             <Route path="/routing-rules" element={<RoutingRules />} />

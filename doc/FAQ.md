@@ -383,6 +383,87 @@ print(result)
 
 ---
 
+### How does `invocation_service.py` work, and what does `_resolve_auth_headers` do inside it?
+
+`AgentInvocationService` (`app/services/agent_gateway/invocation_service.py`) is the
+**governed invocation path** for the Agent Gateway — a consumer asks for a
+**capability** (e.g. `"pricing"`), never a specific agent or endpoint directly, and the
+service decides which registered agent actually handles it. It mirrors the same
+governed-call pattern MCP `tools/call` uses (candidate lookup → policy gate → dispatch
+→ never raise on a downstream failure), just applied to agents instead of tools.
+
+**`invoke()` — picking which agent handles the request:**
+
+1. **Find candidates**: `AgentRepo.list_by_capability()` returns every `active` agent
+   whose `capabilities` list includes the requested one, **ordered by `priority`
+   ascending** — the same "lower number wins" convention as a Routing Rule target's
+   `weight`. Only `active` agents are ever candidates; registering or approving an
+   agent never by itself makes it eligible to be invoked.
+2. **No candidates at all** → returns immediately with
+   `authorization_decision="no_active_agent"` and an error — nothing to gate.
+3. **Policy gate, first-match-wins**: for each candidate *in priority order*, it calls
+   the same `PolicyEngine.evaluate()` used by MCP `tools/call`, this time checking the
+   `agent_key` dimension (via `allowed_agent_keys`) instead of `tool_name`. The **first**
+   candidate that passes is dispatched to immediately — this is not "try all, pick the
+   best," it's "take the highest-priority agent this caller is actually allowed to
+   use." If every candidate is rejected by policy, it returns
+   `authorization_decision="denied"` only after the loop exhausts every candidate.
+
+**`_dispatch()` — actually calling the agent:**
+
+- If the winning agent has no `endpoint_url` configured, that's an immediate error
+  result — but note `authorization_decision` is still `"allowed"`, because the policy
+  check already passed; this is a *configuration* problem, not an *authorization* one.
+- Resolves outbound auth headers (see below), then `POST`s
+  `{"operation": ..., "payload": ...}` to `agent.endpoint_url` with a
+  `httpx.AsyncClient` bounded by `agent_invocation_timeout_seconds`.
+- A transport-level failure (`httpx.HTTPError` — connection refused, timeout, DNS,
+  etc.) is caught and logged, and returns a normal error *result* — it never raises up
+  to the caller.
+- A non-2xx HTTP response **from the agent itself** is treated as a **completed
+  invocation** with `status=error` (not a gateway failure) — the exact same
+  "`isError`, don't raise" treatment `RestExecutor` gives a REST-backed MCP tool's
+  non-2xx response. Only `REMOTE_HTTP` dispatch exists today; real A2A remote
+  invocation and an in-process LangGraph boundary are both still Future Capability.
+
+**`_resolve_auth_headers()` — how the agent's own credential gets attached:**
+
+```python
+async def _resolve_auth_headers(self, agent: Agent) -> dict[str, str]:
+    config = agent.auth_config or {}
+    auth_type = config.get("type", "none")
+    if auth_type == "none":
+        return {}
+    credential_ref = config.get("credential_ref")
+    value = await self.secret_service.get_secret(credential_ref) if credential_ref else None
+    if not value:
+        return {}
+    if auth_type == "bearer":
+        return {"Authorization": f"Bearer {value}"}
+    if auth_type == "api_key":
+        return {config.get("header_name", "X-API-Key"): value}
+    return {}
+```
+
+It reads the agent's own `auth_config` field (`{"type": "none"|"bearer"|"api_key",
+"credential_ref": ..., "header_name": ...}` — the same shape as an MCP server's or a
+REST API service's `auth_config`) and builds the header the gateway will send when
+**it** calls out to the agent's endpoint:
+- `none` → no auth header at all.
+- `bearer` → `Authorization: Bearer <value>`.
+- `api_key` → a header named by `header_name` (default `X-API-Key`) carrying `<value>`.
+
+**The one detail worth remembering**: `credential_ref` here is resolved through the
+**Secret Provider layer** (`self.secret_service.get_secret(...)`) — a real secret
+lookup, Fernet-encrypted at rest by default. This is different from an MCP server's
+outbound auth (`mcp_client.py`'s own `_resolve_auth_headers`), which resolves
+`credential_ref` from a **plain OS environment variable** instead — see the MCP
+Gateway entry above for that asymmetry. Agents and REST API services (API Registry)
+both go through the proper Secret Provider; MCP servers are the one documented
+exception.
+
+---
+
 ### Request numbers are increasing but cost isn't changing — how does budget/cost tracking work?
 
 `CostService.calculate()` (called from `chat.py`/`embeddings.py` after every completion)

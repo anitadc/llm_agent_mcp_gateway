@@ -115,6 +115,17 @@ class Settings(BaseSettings):
     agent_approval_stages: str = "security,technical,business"
     agent_invocation_timeout_seconds: float = 10.0
     agent_default_rate_limit_per_window: int = 60
+    # How long a caller-supplied Idempotency-Key on POST /v1/agent-invocations is
+    # remembered before a repeat with the same key is treated as a fresh call.
+    agent_idempotency_ttl_seconds: int = 86400
+    # SLA deadline stamped on every AgentApprovalTask at creation, and how often the
+    # background sweep checks for overdue ones. Either set to 0 disables the sweep
+    # loop entirely -- same on/off convention as the MCP background loops below.
+    agent_approval_sla_hours: int = 48
+    agent_approval_sla_sweep_interval_seconds: int = 3600
+    # 0 disables the periodic liveness loop; POST /v1/agents/{id}/health-check is
+    # still available on-demand either way -- mirrors mcp_health_check_interval_seconds.
+    agent_health_check_interval_seconds: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

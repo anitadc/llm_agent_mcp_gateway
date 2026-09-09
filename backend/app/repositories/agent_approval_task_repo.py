@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -30,5 +31,21 @@ class AgentApprovalTaskRepo(BaseRepository[AgentApprovalTask]):
             select(AgentApprovalTask)
             .options(selectinload(AgentApprovalTask.agent))
             .where(AgentApprovalTask.decision == AgentApprovalDecision.pending)
+        )
+        return list(result.scalars().all())
+
+    async def list_overdue(self, now: datetime) -> list[AgentApprovalTask]:
+        """Pending tasks past their SLA that haven't been flagged yet -- the
+        background sweep's input set. Not re-flagging an already-escalated task
+        means the sweep is idempotent across runs."""
+        result = await self.db.execute(
+            select(AgentApprovalTask)
+            .options(selectinload(AgentApprovalTask.agent))
+            .where(
+                AgentApprovalTask.decision == AgentApprovalDecision.pending,
+                AgentApprovalTask.due_at.is_not(None),
+                AgentApprovalTask.due_at < now,
+                AgentApprovalTask.escalated_at.is_(None),
+            )
         )
         return list(result.scalars().all())
