@@ -180,8 +180,8 @@ flowchart TB
         VK["valkey/valkey (Redis-compatible)"]
         KC["Keycloak (pre-seeded realm)"]
         GM["guardrails-mock (reference guardrails service)"]
-        BE["gateway-backend (FastAPI)"]
-        FE["gateway-frontend (React, served via `serve`)"]
+        BE["tcsaigateway-backend (FastAPI)"]
+        FE["tcsaigateway-frontend (React, served via `serve`)"]
     end
     FE --> BE
     BE --> PG
@@ -190,7 +190,7 @@ flowchart TB
     BE --> GM
 ```
 
-Every component ships its own Dockerfile; `gateway-backend` runs database migrations (`alembic upgrade head`) automatically on startup before serving traffic.
+Every component ships its own Dockerfile; `tcsaigateway-backend` runs database migrations (`alembic upgrade head`) automatically on startup before serving traffic.
 
 **Implemented — cloud deployment model:** because every external dependency (identity provider, secret backend, LLM provider) is selected through configuration rather than hard-coded, the same container images run unmodified on a VM, an existing container platform, or a managed Kubernetes cluster with an externally-provisioned Postgres/Redis-compatible pair.
 

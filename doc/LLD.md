@@ -45,7 +45,7 @@ flowchart TB
         SDKApp["Application code\n(OpenAI-compatible / MCP client)"]
     end
 
-    subgraph Backend["gateway-backend (FastAPI, single process)"]
+    subgraph Backend["tcsaigateway-backend (FastAPI, single process)"]
         MW["Middleware chain"]
         API["API routers (api/v1/*)"]
         SVC["Services\n(routing, mcp, api_registry, guardrails, policy, cost, cache, rate-limit)"]

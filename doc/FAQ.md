@@ -26,7 +26,7 @@ default (Keycloak for identity, Postgres for secrets).
 Two ways to actually use one, after filling in its settings and redeploying:
 
 1. **Replace the global default** — set `IDENTITY_PROVIDER` (in `docker-compose.yml`'s
-   `gateway-backend` environment) to `entra`/`auth0`/`okta`/`aws_identity`/`google`. Only
+   `tcsaigateway-backend` environment) to `entra`/`auth0`/`okta`/`aws_identity`/`google`. Only
    one provider can be the global default at a time.
 2. **Run it alongside Keycloak** — leave `IDENTITY_PROVIDER=keycloak` and add a row under
    **Tenant identity configs** on the same page (`{tenant_id, provider, issuer,
@@ -207,7 +207,7 @@ and for the latter two, a credential ref (+ header name for `api_key`).
 **not** resolved through the Secret Provider — `credential_ref` names a plain **OS
 environment variable on the backend container** (`os.environ.get(credential_ref)` in
 `mcp_client.py`), a documented asymmetry, not an oversight. To use `bearer`/`api_key`
-auth you must add that env var to `docker-compose.yml`'s `gateway-backend` block and
+auth you must add that env var to `docker-compose.yml`'s `tcsaigateway-backend` block and
 redeploy; setting it via the Secrets page does nothing for this.
 
 **2. Health-check it** — a background loop probes every active server every
@@ -435,7 +435,7 @@ The API key you sent doesn't hash-match any row in the `api_keys` table. Common 
 ### I edited `backend/.env` and nothing changed after redeploying — why?
 
 `docker-compose.yml` sets every backend setting explicitly in its own `environment:`
-block for `gateway-backend`, and real Docker environment variables always win over
+block for `tcsaigateway-backend`, and real Docker environment variables always win over
 `backend/.env` for the same key. So editing `backend/.env` only has an effect for a
 setting that **isn't** already listed in `docker-compose.yml`. To change one that is,
 edit `docker-compose.yml` directly, or use a **root-level** `.env` (next to
@@ -474,7 +474,7 @@ delayed-expansion quirk). Shell out to PowerShell instead — `Invoke-RestMethod
 JSON natively:
 
 ```
-powershell -NoProfile -Command "$t=(Invoke-RestMethod -Method Post -Uri http://localhost:8180/realms/gateway/protocol/openid-connect/token -Body @{client_id='gateway-frontend';grant_type='password';username='admin@gateway.local';password='admin123'}).access_token; ..."
+powershell -NoProfile -Command "$t=(Invoke-RestMethod -Method Post -Uri http://localhost:8180/realms/gateway/protocol/openid-connect/token -Body @{client_id='tcsaigateway-frontend';grant_type='password';username='admin@gateway.local';password='admin123'}).access_token; ..."
 ```
 
 Multi-Tenant Identity Configs

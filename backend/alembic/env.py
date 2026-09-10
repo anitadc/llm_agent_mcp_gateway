@@ -2,13 +2,12 @@ import asyncio
 from logging.config import fileConfig
 
 from sqlalchemy import pool
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import async_engine_from_config, create_async_engine
 
 from alembic import context
 
 from app.core.config import get_settings
 from app.db.base import Base
-from app.db import models  # noqa: F401 -- import side effect registers every model on Base.metadata
 
 config = context.config
 
@@ -50,10 +49,15 @@ def do_run_migrations(connection) -> None:
 
 
 async def run_migrations_online() -> None:
-    configuration = config.get_section(config.config_ini_section) or {}
-    configuration["sqlalchemy.url"] = get_url()
-    connectable = async_engine_from_config(configuration, prefix="sqlalchemy.", poolclass=pool.NullPool)
-
+    # configuration = config.get_section(config.config_ini_section) or {}
+    # configuration["sqlalchemy.url"] = get_url()
+    # connectable = async_engine_from_config(configuration, prefix="sqlalchemy.", poolclass=pool.NullPool)
+    url, connect_args = settings.parse_database_url()
+    connectable = create_async_engine(
+        url,
+        poolclass=pool.NullPool,
+        connect_args=connect_args,
+    )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
 

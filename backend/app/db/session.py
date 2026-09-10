@@ -8,7 +8,9 @@ from app.core.logging import get_logger
 settings = get_settings()
 logger = get_logger(__name__)
 
-engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+url, connect_args = settings.parse_database_url()
+
+engine = create_async_engine(url, pool_pre_ping=True, connect_args=connect_args)
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 

@@ -1,5 +1,5 @@
 {
-  "realm": "gateway",
+  "realm": "tcsaigateway",
   "enabled": true,
   "sslRequired": "none",
   "registrationAllowed": false,
@@ -13,7 +13,7 @@
   },
   "clients": [
     {
-      "clientId": "gateway-frontend",
+      "clientId": "tcsaigateway-frontend",
       "enabled": true,
       "publicClient": true,
       "protocol": "openid-connect",
@@ -26,12 +26,12 @@
       },
       "protocolMappers": [
         {
-          "name": "gateway-backend-audience",
+          "name": "tcsaigateway-backend-audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
           "config": {
-            "included.client.audience": "gateway-backend",
+            "included.client.audience": "tcsaigateway-backend",
             "id.token.claim": "false",
             "access.token.claim": "true"
           }
@@ -39,7 +39,7 @@
       ]
     },
     {
-      "clientId": "gateway-backend",
+      "clientId": "tcsaigateway-backend",
       "enabled": true,
       "bearerOnly": true,
       "protocol": "openid-connect"
@@ -47,9 +47,9 @@
   ],
   "users": [
     {
-      "username": "admin@gateway.local",
-      "email": "admin@gateway.local",
-      "firstName": "Gateway",
+      "username": "admin@tcsaigateway.local",
+      "email": "admin@tcsaigateway.local",
+      "firstName": "Tcsaigateway",
       "lastName": "Admin",
       "enabled": true,
       "emailVerified": true,
@@ -57,6 +57,42 @@
         { "type": "password", "value": "admin123", "temporary": false }
       ],
       "realmRoles": ["admin"]
+    },
+    {
+      "username": "team_lead@tcsaigateway.local",
+      "email": "team_lead@tcsaigateway.local",
+      "firstName": "Tcsaigateway",
+      "lastName": "Team Lead",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "team_lead123", "temporary": false }
+      ],
+      "realmRoles": ["team_lead"]
+    },
+    {
+      "username": "developer@tcsaigateway.local",
+      "email": "developer@tcsaigateway.local",
+      "firstName": "Tcsaigateway",
+      "lastName": "Developer",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "developer123", "temporary": false }
+      ],
+      "realmRoles": ["developer"]
+    },
+    {
+      "username": "viewer@tcsaigateway.local",
+      "email": "viewer@tcsaigateway.local",
+      "firstName": "Tcsaigateway",
+      "lastName": "Viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "viewer123", "temporary": false }
+      ],
+      "realmRoles": ["viewer"]
     }
   ]
 }

@@ -1,4 +1,5 @@
 from functools import lru_cache
+import re
 from typing import Literal
 
 from pydantic import field_validator, model_validator
@@ -14,23 +15,23 @@ class Settings(BaseSettings):
     database_schema: str | None = None
     database_url: str | None = None
 
-    # @field_validator("database_url", mode="before")
-    # @classmethod
-    # def normalize_database_url(cls, value, info):
-    #     if value is None:
-    #         return value
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value, info):
+        if value is None:
+            return value
 
-    #     url = str(value).strip()
-    #     if not url:
-    #         return value
+        url = str(value).strip()
+        if not url:
+            return value
 
-    #     schema = (info.data.get("database_schema") or "ai_gateway").strip() or "ai_gateway"
-    #     if "search_path" in url:
-    #         return url
+        schema = (info.data.get("database_schema") or "ai_gateway").strip() or "ai_gateway"
+        if "search_path" in url:
+            return url
 
-    #     separator = "&" if "?" in url else "?"
-    #     encoded_schema = schema.replace(" ", "").replace(",", "%2C")
-    #     return f"{url}{separator}options=-c&search_path={encoded_schema}"
+        separator = "&" if "?" in url else "?"
+        encoded_schema = schema.replace(" ", "").replace(",", "%2C")
+        return f"{url}{separator}options=-c search_path={encoded_schema}"
 
     valkey_host: str = "localhost"
     valkey_port: int = 6379
@@ -40,6 +41,9 @@ class Settings(BaseSettings):
     valkey_url: str | None = None
     cache_ttl_seconds: int = 300
     rate_limit_window_seconds: int = 60
+
+    window_minutes: int = 30
+    min_samples: int = 3
 
     # --- Identity Provider layer (app/identity/) ---
     # Keycloak remains the default; its own settings below double as
@@ -202,6 +206,41 @@ class Settings(BaseSettings):
             )
         return self
 
+    def parse_database_url(self) -> tuple[str, dict]:
+        '''# parse the URL to safely handle options for asyncio drivers (e.g., asyncpg) and return a tuple of (url, connect_args).'''
+        if not self.database_url:
+            raise ValueError("database_url is not set")
+
+        from sqlalchemy.engine import make_url
+
+        url = make_url(self.database_url)
+
+        connect_args = {}
+
+        if url.drivername in ("postgresql+asyncpg", "postgres+asyncpg"):
+            query = dict(url.query)
+            if "options" in query:
+                options_value = query.pop("options")
+
+                #handle sqlalchemy parses query params as list or tuple, but asyncpg expects a single string
+                options_str = (" ".join(options_value) 
+                           if isinstance(options_value, (list, tuple)) 
+                           else str(options_value)).strip()
+
+                server_settings = {}
+
+                #parse common psycopg2-style options from the options string
+                for match in re.finditer(r"-c\s+(a-[a-zA-Z0-9_]+)=([^\s]+)", options_str):
+                    key, value = match.groups()
+                    server_settings[key] = value
+
+                if server_settings:
+                    connect_args["server_settings"] = server_settings
+
+                # Rebuild the URL without the options parameter, since asyncpg will handle it via connect_args
+                url = url._replace(query=query)
+            
+        return url, connect_args
 
 @lru_cache
 def get_settings() -> Settings:

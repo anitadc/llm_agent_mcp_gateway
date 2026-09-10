@@ -10,7 +10,7 @@ CLAIMS = {
     "email": "alice@example.com",
     "preferred_username": "alice",
     "realm_access": {"roles": ["admin", "offline_access"]},
-    "resource_access": {"gateway-frontend": {"roles": ["finance-user"]}},
+    "resource_access": {"tcsaigateway-frontend": {"roles": ["finance-user"]}},
     "groups": ["/finance", "/finance/reporting"],
 }
 
@@ -20,9 +20,9 @@ def _settings(**overrides) -> Settings:
         database_url="postgresql+asyncpg://test:test@localhost/test",
         valkey_url="redis://localhost:6379/1",
         keycloak_base_url="https://kc.test",
-        keycloak_realm="gateway",
-        keycloak_client_id="gateway-frontend",
-        keycloak_audience="gateway-backend",
+        keycloak_realm="tcsaigateway",
+        keycloak_client_id="tcsaigateway-frontend",
+        keycloak_audience="tcsaigateway-backend",
         guardrails_base_url="http://localhost:9000",
         api_key_secret_pepper="pepper",
     )

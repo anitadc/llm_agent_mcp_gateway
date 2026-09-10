@@ -32,10 +32,10 @@ LANE 1 — Clients (outside the host):
   API using a scoped API key instead of a browser session
 
 LANE 2 — Docker Compose Host (single node), six containers:
-- "gateway-frontend" -- React SPA, served via `serve`, container port 5173
-- "gateway-backend" -- FastAPI app (Uvicorn), container port 8000, runs `alembic upgrade
+- "tcsaigateway-frontend" -- React SPA, served via `serve`, container port 5173
+- "tcsaigateway-backend" -- FastAPI app (Uvicorn), container port 8000, runs `alembic upgrade
   head` on startup before serving traffic
-- "postgres" -- postgres:16-alpine, container port 5432, database "gateway"
+- "postgres" -- postgres:16-alpine, container port 5432, database "ai_gateway"
 - "valkey" -- valkey/valkey (Redis-compatible), container port 6379
 - "keycloak" -- quay.io/keycloak/keycloak:25.0, start-dev with a pre-imported realm,
   container port 8080 -- the default Identity Provider
@@ -43,17 +43,17 @@ LANE 2 — Docker Compose Host (single node), six containers:
   9000
 
 Connections inside/from Lane 2 (solid, always active):
-- "Admin Browser" -> "gateway-frontend" : HTTPS, browser loads the SPA
+- "Admin Browser" -> "tcsaigateway-frontend" : HTTPS, browser loads the SPA
 - "Admin Browser" -> "keycloak" : HTTPS, browser-facing login/redirect flow (OIDC)
-- "gateway-frontend" -> "gateway-backend" : HTTPS/REST, VITE_API_BASE
-- "External API Clients" -> "gateway-backend" : HTTPS/REST, Bearer API key or IdP token
-- "gateway-backend" -> "postgres" : asyncpg (SQL), primary datastore for all app tables
+- "tcsaigateway-frontend" -> "tcsaigateway-backend" : HTTPS/REST, VITE_API_BASE
+- "External API Clients" -> "tcsaigateway-backend" : HTTPS/REST, Bearer API key or IdP token
+- "tcsaigateway-backend" -> "postgres" : asyncpg (SQL), primary datastore for all app tables
   including request logs, cost ledger, and (new) an encrypted `secrets` table
-- "gateway-backend" -> "valkey" : Redis protocol, response cache / secret cache / rate
+- "tcsaigateway-backend" -> "valkey" : Redis protocol, response cache / secret cache / rate
   limiter counters / MCP OAuth2 token cache
-- "gateway-backend" -> "keycloak" : HTTPS, JWKS fetch for token validation (internal
+- "tcsaigateway-backend" -> "keycloak" : HTTPS, JWKS fetch for token validation (internal
   Docker network hostname, distinct from the browser-facing URL above)
-- "gateway-backend" -> "guardrails-mock" : HTTPS/REST, content safety checks on
+- "tcsaigateway-backend" -> "guardrails-mock" : HTTPS/REST, content safety checks on
   prompts/completions
 
 LANE 3 — External Integrations (outside the host, each reached only if configured):
@@ -71,15 +71,15 @@ LANE 3 — External Integrations (outside the host, each reached only if configu
 
 Connections from Lane 2 to Lane 3 (dashed, outbound HTTPS, only the selected backend per
 category is actually reached at runtime):
-- "gateway-backend" -> "LLM Providers" : HTTPS, chat/embeddings completion calls (via
+- "tcsaigateway-backend" -> "LLM Providers" : HTTPS, chat/embeddings completion calls (via
   LiteLLM routing)
-- "gateway-backend" -> "Enterprise Identity Providers" : HTTPS, JWKS/token validation,
+- "tcsaigateway-backend" -> "Enterprise Identity Providers" : HTTPS, JWKS/token validation,
   selected instead of Keycloak
-- "gateway-backend" -> "Secret Backends" : HTTPS, credential resolution, selected instead
+- "tcsaigateway-backend" -> "Secret Backends" : HTTPS, credential resolution, selected instead
   of the built-in Postgres secret storage
-- "gateway-backend" -> "MCP Tool Servers" : HTTPS, JSON-RPC (MCP protocol) tool discovery
+- "tcsaigateway-backend" -> "MCP Tool Servers" : HTTPS, JSON-RPC (MCP protocol) tool discovery
   and invocation
-- "gateway-backend" -> "Registered REST APIs (API Registry)" : HTTPS, REST tool execution
+- "tcsaigateway-backend" -> "Registered REST APIs (API Registry)" : HTTPS, REST tool execution
 
 Title the diagram "AI Gateway — Deployment Architecture (Docker Compose)". Add a footnote
 under the diagram: "Every external dependency (identity provider, secret backend, LLM

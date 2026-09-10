@@ -10,9 +10,9 @@ from testcontainers.postgres import PostgresContainer
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
 os.environ.setdefault("VALKEY_URL", "redis://localhost:6379/1")
 os.environ.setdefault("KEYCLOAK_BASE_URL", "http://localhost:8080")
-os.environ.setdefault("KEYCLOAK_REALM", "gateway")
-os.environ.setdefault("KEYCLOAK_CLIENT_ID", "gateway-frontend")
-os.environ.setdefault("KEYCLOAK_AUDIENCE", "gateway-backend")
+os.environ.setdefault("KEYCLOAK_REALM", "tcsaigateway")
+os.environ.setdefault("KEYCLOAK_CLIENT_ID", "tcsaigateway-frontend")
+os.environ.setdefault("KEYCLOAK_AUDIENCE", "tcsaigateway-backend")
 os.environ.setdefault("GUARDRAILS_BASE_URL", "http://localhost:9000")
 os.environ.setdefault("API_KEY_SECRET_PEPPER", "test-pepper")
 

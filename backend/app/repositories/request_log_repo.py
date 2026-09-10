@@ -1,6 +1,7 @@
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
+from app.core.config import get_settings
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -11,7 +12,7 @@ from app.repositories.base import BaseRepository
 
 logger = get_logger(__name__)
 
-
+settings = get_settings()
 class RequestLogRepo(BaseRepository[RequestLog]):
     model = RequestLog
 
@@ -76,7 +77,7 @@ class RequestLogRepo(BaseRepository[RequestLog]):
         recent successful requests only. Returns None if there isn't enough recent
         data yet (min_samples), so callers can fall back sensibly for cold-start
         targets rather than routing on a single noisy sample."""
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes= settings.window_minutes | window_minutes)
         stmt = select(
             func.percentile_cont(0.5).within_group(RequestLog.latency_ms),
             func.count(RequestLog.id),
@@ -87,6 +88,6 @@ class RequestLogRepo(BaseRepository[RequestLog]):
             RequestLog.created_at >= cutoff,
         )
         p50, sample_count = (await self.db.execute(stmt)).one()
-        if p50 is None or sample_count < min_samples:
+        if p50 is None or sample_count < settings.min_samples | min_samples:
             return None
         return float(p50)
