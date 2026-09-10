@@ -22,7 +22,7 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 _IDENTITY_PROVIDER_ENUM = postgresql.ENUM(
-    "keycloak", "entra", "auth0", "okta", "aws_identity", "google", name="identity_provider_name"
+    "keycloak", "entra", "auth0", "okta", "aws_identity", "google", "local", name="identity_provider_name"
 )
 
 
@@ -35,7 +35,7 @@ def upgrade() -> None:
         "users",
         sa.Column(
             "identity_provider",
-            postgresql.ENUM("keycloak", "entra", "auth0", "okta", "aws_identity", "google", name="identity_provider_name", create_type=False),
+            postgresql.ENUM("keycloak", "entra", "auth0", "okta", "aws_identity", "google", "local", name="identity_provider_name", create_type=False),
             nullable=False,
             server_default="keycloak",
         ),
@@ -48,7 +48,7 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.String(), nullable=False, unique=True),
         sa.Column(
             "provider",
-            postgresql.ENUM("keycloak", "entra", "auth0", "okta", "aws_identity", "google", name="identity_provider_name", create_type=False),
+            postgresql.ENUM("keycloak", "entra", "auth0", "okta", "aws_identity", "google", "local", name="identity_provider_name", create_type=False),
             nullable=False,
         ),
         sa.Column("issuer", sa.String(), nullable=False, unique=True),

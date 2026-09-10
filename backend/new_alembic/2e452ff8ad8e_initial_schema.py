@@ -96,7 +96,7 @@ def upgrade() -> None:
     op.create_table('tenant_identity_config',
     sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('tenant_id', sa.String(), nullable=False),
-    sa.Column('provider', sa.Enum('keycloak', 'entra', 'auth0', 'okta', 'aws_identity', 'google', name='identity_provider_name'), nullable=False),
+    sa.Column('provider', sa.Enum('keycloak', 'entra', 'auth0', 'okta', 'aws_identity', 'google', "local", name='identity_provider_name'), nullable=False),
     sa.Column('issuer', sa.String(), nullable=False),
     sa.Column('configuration', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -130,7 +130,7 @@ def upgrade() -> None:
     )
     op.create_table('users',
     sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
-    sa.Column('identity_provider', sa.Enum('keycloak', 'entra', 'auth0', 'okta', 'aws_identity', 'google', name='identity_provider_name'), nullable=False),
+    sa.Column('identity_provider', sa.Enum('keycloak', 'entra', 'auth0', 'okta', 'aws_identity', 'google', 'local', name='identity_provider_name'), nullable=False),
     sa.Column('external_sub', sa.String(), nullable=True),
     sa.Column('email', sa.String(), nullable=False),
     sa.Column('role', sa.Enum('admin', 'team_lead', 'developer', 'viewer', name='user_role'), nullable=False),

@@ -1,6 +1,6 @@
 from typing import Any
 
-from backend.app.identity.local_token import issue_local_jwt
+from app.identity.local_token import issue_local_jwt
 import jwt
 
 from app.core.exceptions import AuthError

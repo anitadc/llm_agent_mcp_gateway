@@ -23,8 +23,9 @@ async def get_provider_info(settings=Depends(get_settings)) -> dict:
     login flow (Keycloak redirect vs. a dev local token form).
     """
     return {
-        "identity_provider": settings.identity_provider
-        }
+        "identity_provider": settings.identity_provider,
+        "jwt_secret": settings.jwt_secret 
+    }
 
 
 @router.post("/token/exchange", response_model=SessionInfo)

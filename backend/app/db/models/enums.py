@@ -88,6 +88,7 @@ class IdentityProviderName(str, enum.Enum):
     okta = "okta"
     aws_identity = "aws_identity"
     google = "google"
+    local = "local"
 
 
 class McpToolSourceType(str, enum.Enum):

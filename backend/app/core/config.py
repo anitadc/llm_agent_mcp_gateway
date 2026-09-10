@@ -230,7 +230,7 @@ class Settings(BaseSettings):
                 server_settings = {}
 
                 #parse common psycopg2-style options from the options string
-                for match in re.finditer(r"-c\s+(a-[a-zA-Z0-9_]+)=([^\s]+)", options_str):
+                for match in re.finditer(r"-c\s+([a-zA-Z0-9_]+)=([^\s]+)", options_str):
                     key, value = match.groups()
                     server_settings[key] = value
 
@@ -238,7 +238,7 @@ class Settings(BaseSettings):
                     connect_args["server_settings"] = server_settings
 
                 # Rebuild the URL without the options parameter, since asyncpg will handle it via connect_args
-                url = url._replace(query=query)
+                url = url.set(query=query)
             
         return url, connect_args
 

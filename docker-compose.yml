@@ -94,7 +94,7 @@ services:
     #   - ./backend/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
-      DATABASE_URL: postgresql+asyncpg://gateway:gateway@postgres:5432/gateway
+      DATABASE_URL: postgresql+asyncpg://gateway:gateway@postgres:5432/gateway?options=-c search_path=ai_gateway
       database_schema: ${database_schema:-ai_gateway}
     depends_on:
       postgres:
@@ -108,7 +108,7 @@ services:
     # command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level ${LOG_LEVEL:-debug}"
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
-      DATABASE_URL: postgresql+asyncpg://gateway:gateway@postgres:5432/gateway
+      DATABASE_URL: postgresql+asyncpg://gateway:gateway@postgres:5432/gateway?options=-c search_path=ai_gateway
       database_schema: ${database_schema:-ai_gateway}
       VALKEY_HOST: ${VALKEY_HOST:-valkey}
       VALKEY_PORT: ${VALKEY_PORT:-6379}
@@ -135,7 +135,7 @@ services:
       # default and remains fully configured for local dev out of the box;
       # switch IDENTITY_PROVIDER + the matching block below to run against an
       # enterprise IdP instead. See docs/identity-provider-architecture.md.
-      IDENTITY_PROVIDER: ${IDENTITY_PROVIDER:-keycloak}
+      IDENTITY_PROVIDER: ${IDENTITY_PROVIDER:-local}
       ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:-}
       ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:-}
       AUTH0_DOMAIN: ${AUTH0_DOMAIN:-}

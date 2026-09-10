@@ -3,6 +3,7 @@ import Keycloak from "keycloak-js";
 const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL;
 const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM;
 const KEYCLOAK_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID;
+const baseURL = import.meta.env.VITE_API_BASE;
 
 export const isKeycloakConfigured = Boolean(KEYCLOAK_URL && KEYCLOAK_REALM && KEYCLOAK_CLIENT_ID);
 
@@ -86,7 +87,7 @@ async function getToken() {
 }
 
 async function issueLocalToken({ user_id, email, tenant_id = null, roles = [], groups = [], expires_seconds = 3600 }) {
-  const res = await fetch("/v1/auth/local/issue", {
+  const res = await fetch(`${baseURL}/v1/auth/local/issue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ user_id, email, tenant_id, roles, groups, expires_seconds }),
@@ -114,7 +115,7 @@ async function getSession() {
   const token = _localGetToken();
   if (!token) throw new Error("No token available");
 
-  const res = await fetch("/v1/auth/token/exchange", {
+  const res = await fetch(`${baseURL}/v1/auth/token/exchange`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
   });
