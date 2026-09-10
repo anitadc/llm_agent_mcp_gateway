@@ -939,4 +939,115 @@ through the gateway. The flow described above is "an agent using the gateway as 
 access layer"; the Agent Gateway is "the gateway routing to an agent as the callee." Same
 gateway, two unrelated call directions.
 
+---
+
+### If one agent invokes another agent — internal or external — should that go through the Agent Gateway?
+
+**Yes — always route it through the Agent Gateway, whether the target is internal or external.**
+The gateway is designed as the only sanctioned path to any registered agent. There's no code path
+in this app for "in-process" or "direct" agent-to-agent calls today — every invocation, internal
+or external, goes out over HTTP through `AgentInvocationService`. Bypassing the gateway isn't a
+shortcut to the same destination with less overhead; it's a different, ungoverned path that skips
+every control this system exists to provide.
+
+**What "internal" vs "external" actually means in this codebase**
+
+Two fields on the `Agent` model already model this distinction, though they mean different
+things — worth being precise:
+
+- `trust_level` (`t0_unknown` … `t1_registered_internal` … `t4_approved_external_partner` …
+  `t5_public_untrusted`) is the field that literally encodes "is this an internal service or an
+  external partner/public agent." Caveat: as of the current code, this is descriptive metadata
+  only — it's stored and returned in `AgentOut`, but nothing in `PolicyEngine` or
+  `AgentInvocationService` actually branches on it yet. It doesn't yet gate or restrict anything
+  by itself.
+- `visibility` (`private`/`published`) + `project_id` + `AgentProjectEnablement` is the field
+  that's *actually enforced* today — a `private` agent is only reachable by its owning project or
+  a project explicitly opted in; `published` (the default) is reachable by anyone who clears the
+  `PolicyEngine` gate. This is the practical "internal-only" vs "open to everyone" boundary right
+  now, independent of whether the agent's *real* endpoint happens to sit inside or outside your
+  network.
+
+So: register an agent that's genuinely internal (say, a finance-team agent only your own team
+should call) as `private`, scoped to your project. Register one meant to be broadly usable —
+whether it's your own service or a genuine third-party SaaS agent — as `published`. Either way,
+the registration record and the invocation path are identical; only the visibility gate differs.
+
+**The recommended step-by-step flow: Agent A invoking Agent B through the gateway**
+
+1. Agent B must already be a registered, `active` agent — it went through registration
+   (`draft`) → multi-stage approval (`under_review` → `approved`) → `publish` (`active`), the
+   same governance flow documented earlier in this FAQ and in the README's Agent Gateway section.
+   If B doesn't exist yet as a gateway-registered agent, it has to go through that onboarding
+   first — there's no ad-hoc/unregistered invocation.
+2. Whatever runtime executes Agent A's logic must hold a gateway API key with the `agent:invoke`
+   scope (or be an Identity-Provider-authenticated human/service, gated instead by
+   `PolicyEngine`). This is the one nuance worth being very clear about: **the gateway has no
+   concept of "Agent A" as a caller identity.** Agent A isn't itself a first-class principal —
+   it's whatever process is running its code, and that process needs its own API key (issued the
+   normal way, via `POST /v1/keys`) to be allowed to call the gateway at all. There's no
+   "agent-to-agent" credential type distinct from any other caller.
+3. Agent A calls `POST /v1/agent-invocations` with `{"capability": "...", "operation": "...",
+   "payload": {...}}` — asking for a *capability*, never naming Agent B directly, even if A knows
+   exactly which agent it wants. This indirection is the whole point: it's what lets B be
+   swapped, scaled, or replaced without A's code changing.
+4. Inside the gateway, per request (`AgentInvocationService.invoke()`):
+   - Every `active` agent advertising that capability is a candidate, tried in ascending
+     `priority` order (so if B has competitors registered for the same capability, the
+     lowest-priority-number one is tried first).
+   - Each candidate is checked against **visibility/project-enablement** first (is A's project
+     allowed to reach this specific candidate if it's `private`?), then against the
+     **`PolicyEngine`** (RBAC/ABAC over role/identity-provider/`agent_key`, via
+     `allowed_agent_keys`) — API-key callers instead rely on their `agent:invoke` scope and skip
+     this second check.
+   - The first candidate that passes both gates is dispatched to.
+5. Dispatch — the gateway `POST`s to B's registered `endpoint_url`, either as its own
+   `{"operation","payload"}` JSON (`protocol: remote_http`, the default) or as a best-effort A2A
+   JSON-RPC envelope (`protocol: a2a`), attaching whatever outbound auth B's `auth_config`
+   specifies, resolved through the **Secret Provider** — so A never needs to know or hold B's
+   credential.
+6. On failure, a transport error or a 5xx from B automatically retries the *next* eligible
+   candidate for that capability (not B specifically retried, a different agent entirely) — so
+   this only helps if more than one agent serves the capability. A 4xx is treated as final.
+7. Result comes back to A as an `InvokeResponse` — `status`, `result`, `cost_usd` (priced via
+   `AgentPricing` if set), and B's identity/version. If A sent an `Idempotency-Key` header, a
+   repeat of that exact key/caller pair replays the first *successful* response instead of
+   re-invoking B.
+8. Every call is logged — an `AgentInvocation` row records the capability, resolved agent,
+   latency, status, and cost, all attributed to A's project — this is what makes the Usage & Cost
+   / audit views possible at all.
+
+**What you'd lose if Agent A called Agent B's endpoint directly (bypassing the gateway)**
+
+Concretely, all of the following disappear the moment A calls B's `endpoint_url` itself instead
+of going through `POST /v1/agent-invocations`:
+
+- No authorization gate at all — `visibility`/project-enablement and the `PolicyEngine` check
+  both live inside the gateway; a direct call skips both entirely.
+- No audit trail — nothing gets written to `AgentInvocation` or `AgentAuditLog`; the call is
+  invisible to the Usage & Cost, Request Logs, and Agent Registry pages.
+- No cost attribution — the `AgentPricing` lookup only happens in `_price()`, inside the gateway
+  path.
+- No candidate failover — direct calls have exactly one destination; there's no "try the next
+  eligible agent for this capability" behavior outside `invoke()`.
+- No rate limiting — the per-capability `RateLimitService` check in `agent_invocations.py` never
+  runs.
+- No idempotency protection — the `Idempotency-Key` cache is entirely inside this one endpoint.
+- No indirection — A would have to hardcode B's endpoint/protocol/auth details itself, defeating
+  the entire "ask for a capability, not an agent" model this gateway (and the MCP Gateway, and
+  the LLM Gateway's routing rules) are all built around.
+
+**Two honesty caveats worth knowing before relying on this for genuine multi-hop agent chains**
+
+- No first-class chaining/tracing today: `InvokeRequest` has a `correlation_id` field, but it's
+  currently dead — declared in the schema, never read or forwarded anywhere in
+  `invocation_service.py` or the logging path. If you need to trace "A called B called C" across
+  multiple gateway invocations, that has to be threaded through your own `payload` and correlated
+  on your own side for now; the gateway won't do it for you yet.
+- No network-boundary enforcement on `endpoint_url`: registering an agent accepts any reachable
+  URL, internal or public internet, with no SSRF-style allowlist — same as MCP servers and REST
+  API services elsewhere in this codebase. "Internal" vs "external" is a registration-time label
+  (`trust_level`, `visibility`) for your own governance process, not something the gateway itself
+  firewalls at the network layer.
+
 
