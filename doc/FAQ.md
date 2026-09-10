@@ -806,4 +806,137 @@ The configuration keys must match the Settings field names that provider's const
 
 One practical wrinkle: you need the issuer value up front, which usually means you've already registered an app/client with that IdP outside this gateway (e.g. an Entra App Registration) so you know its tenant/client id and can construct the issuer URL — this form doesn't create anything on the IdP side, it only tells the gateway how to validate tokens that IdP already issues.
 
+---
+
+### When an agent makes multiple LLM calls and MCP tool calls, how does that actually flow through the gateway?
+
+The most important framing first: **the gateway does not run the agent's loop.** There's no
+orchestrator in this codebase that decides "call the LLM, then call a tool, then call the LLM
+again." That reasoning loop lives entirely in the agent's own code (a LangChain/LangGraph app, a
+custom script, whatever). The gateway's job is to be the single governed front door the agent
+calls into, once per LLM completion and once per tool invocation. Each of those is its own
+independent HTTP request/response cycle. The two paths are separate endpoints with separate
+pipelines, and it's worth being precise about what state (if any) carries over between calls.
+
+**The shared entry pipeline**
+
+Every request — chat or MCP — passes through the same middleware stack first, in this order
+(outermost/first-to-run listed first), per the comment and registration order in `main.py`:
+
+`RequestIDMiddleware -> CORSMiddleware -> AuthMiddleware -> RateLimitMiddleware -> route handler`
+
+- `RequestIDMiddleware` stamps a fresh `request_id` (UUID) onto `request.state` for *this single
+  call* — it does not span multiple calls, so if you want to correlate an agent's whole
+  multi-call session in logs, that has to happen on the agent's side (its own trace/correlation
+  id passed in a custom header or in the request body — nothing here generates one).
+- `AuthMiddleware` resolves the caller into a `Principal` — either an API key (`gw_...` bearer
+  token) or an Identity-Provider-authenticated human — and populates `request.state.principal`.
+- `RateLimitMiddleware` applies one coarse, per-API-key limit to `/v1/chat/completions`,
+  `/v1/embeddings`, and `/mcp` as a whole (`RATE_LIMITED_PATHS` in `rate_limit_middleware.py`) —
+  this is on top of anything the MCP path does internally (see below).
+
+An agent making many LLM calls and many tool calls in the same "session" typically reuses the
+**same API key** for both — there's no shared session object at the gateway level tying them
+together, just the same bearer token on every request.
+
+**Path 1 — each LLM call (`POST /v1/chat/completions`)**
+
+Walking `chat.py` top to bottom, every single completion the agent asks for goes through this
+pipeline **independently**:
+
+1. **Project lookup** from the API key.
+2. **Prompt guardrail check** — the concatenated message content is sent to the Guardrails
+   service; a violation raises `GuardrailBlockedError` and the call never reaches a provider.
+3. **Cache lookup** — a cache key is built from `model` + the exact `messages`/`temperature`/
+   `max_tokens`. If the agent sends the identical prompt twice, the second call short-circuits
+   here and never touches a provider at all — this is the only thing that makes two calls "aware"
+   of each other, and only when they're byte-for-byte identical.
+4. **Routing resolution** — `GatewayRouter.resolve()` looks up the `RoutingRule` matching the
+   requested `model_alias`, then orders its provider targets by the rule's strategy — `priority`
+   (static weight), `cost` (cheapest `model_pricing` row first), or `latency` (lowest recent p50
+   first, recomputed from `request_log` each call). Two calls to the same alias can therefore
+   resolve to a *different* concrete provider/model if the strategy is `latency` or `cost` and
+   the underlying data shifted between calls.
+5. **Dispatch** — a `litellm.Router` is built from the ordered targets and `Router.acompletion()`
+   is called. Provider failover across the target list (e.g. OpenAI down -> fall back to the next
+   target) happens *inside this one call*, handled by litellm itself (`num_retries=1`) — it is
+   not something that spans separate agent-initiated calls.
+6. **Response guardrail check** on the completion text, same block-or-continue semantics as the
+   prompt check.
+7. **Cost calculation**, cache write, and a `background_tasks.add_task(record_request, ...)` call
+   that writes the usage/cost/log row *after* the response is already returned to the agent — so
+   logging latency never adds to the agent's perceived response time.
+
+If the agent fires off five LLM calls, that's five completely separate trips through steps 1-7,
+each with its own `request_id`, each independently cached/routed/costed/guardrailed. Nothing here
+batches or pipelines them — if the agent wants them concurrent, it's the agent issuing five
+concurrent HTTP requests itself.
+
+**Path 2 — each MCP tool call (`POST /mcp`)**
+
+This one is body-routed, not path-routed: every MCP interaction — `initialize`, `tools/list`,
+`tools/call` — hits the same `/mcp` endpoint, and the JSON-RPC `method` field decides what
+happens.
+
+Before the first tool call, a well-behaved agent sends `initialize` once. That handler broadcasts
+`initialize` to every *registry-active* MCP server (never a hardcoded list), records a per-server
+session id for each one, and returns a single `client_session_id` the agent must echo back on
+every subsequent call via the `Mcp-Session-Id` header. This is the one piece of real cross-call
+state in the whole gateway: a JSONB map of `{server_id: server_session_id}` hanging off the
+client's session row (`SessionManager` in `session_manager.py`).
+
+For each `tools/call` the agent then makes:
+
+1. **Scope check** — the API key needs `tool:execute` (or, for a human Identity-Provider caller
+   with no scopes, the request instead goes through `PolicyEngine.evaluate()` — RBAC/ABAC over
+   role/identity-provider/tool_name).
+2. **Rate limit, per tool** — `mcp-tool:{caller}:{tool_name}` — this is *in addition* to the
+   coarse per-key limit the middleware already applied, so a chatty agent hammering one specific
+   tool gets throttled on that tool specifically, separate from its overall request budget.
+3. **Tool resolution** — `RoutingEngine.resolve_tool(tool_name)` looks the tool up purely by name
+   in the tool registry (never by which server the agent thinks it's on) and checks it's both
+   `enabled` and currently routable (server healthy, or REST service active). This is resolved
+   fresh on *every single call* — if an admin disables a tool between two of the agent's calls,
+   the second one fails immediately.
+4. **Dispatch, branching on the tool's source**:
+   - **REST-backed** (API Registry): its own per-service rate limit, then
+     `ApiRegistryService.execute()` translates the call into a plain HTTP request to the
+     registered REST API. Stateless — no session involved.
+   - **MCP-server-backed**: looks up the session's already-recorded server-session-id for *that
+     specific server*; if none exists yet (e.g. the agent skipped `initialize`, or this is the
+     first call touching a server it hadn't used before), it lazily probes/initializes that one
+     server on the spot. Then `McpClient.call_tool()` sends the actual JSON-RPC request to the
+     real MCP server over HTTP.
+5. A downstream **JSON-RPC `error`** from the MCP server is forwarded back verbatim as a normal
+   200 response (it's an application-level result, not a gateway failure) — only gateway-level
+   rejections (bad scope, rate limited, unknown tool) come back as HTTP errors.
+6. Same as chat: a `background_tasks.add_task(record_mcp_request, ...)` fires after the response
+   is sent, logging method/tool/server/status/latency for cost/usage rollups.
+
+So if the agent calls three different tools that happen to live on three different MCP servers,
+you get three independent lookups and three independent (lazily-established, then reused)
+per-server sessions, all hanging off the one `client_session_id` the agent keeps sending.
+
+**Putting "multiple LLM calls + multiple tool calls" together**
+
+For a typical agent turn — say, `tools/call` -> `tools/call` -> `chat/completions` ->
+`tools/call` — what actually happens is four unrelated HTTP requests to the gateway, hitting two
+different endpoints, each independently authenticated, guardrailed/authorized, rate-limited, and
+logged. The only continuity across them is:
+
+- the same API key (or IdP token) on every request,
+- the same `Mcp-Session-Id` header the agent must carry across its MCP calls so the gateway
+  doesn't re-`initialize` every server on every tool call,
+- and, downstream, the same `project_id`/`organization_id` that every one of those
+  background-logged rows carries — which is what lets the Usage & Cost and Request Logs pages
+  roll all of that agent's LLM spend and tool traffic up into one place, even though the gateway
+  itself never tracked them as "one agent's session."
+
+One naming note since it's easy to conflate given this codebase: this is entirely separate from
+the **Agent Gateway**'s own `POST /v1/agent-invocations` — that's for invoking a *registered
+agent* (a third-party autonomous service) by capability, not for an agent making LLM/MCP calls
+through the gateway. The flow described above is "an agent using the gateway as its LLM+tools
+access layer"; the Agent Gateway is "the gateway routing to an agent as the callee." Same
+gateway, two unrelated call directions.
+
 
