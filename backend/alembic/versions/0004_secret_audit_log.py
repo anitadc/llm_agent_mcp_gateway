@@ -58,7 +58,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_secrets_secret_name", table_name="secrets")
-    op.drop_index("ix_secretscreated_at", table_name="secrets")
+    op.drop_index("ix_secrets_created_at", table_name="secrets")
     op.drop_table('secrets')
 
     op.drop_index("ix_secret_audit_log_secret_name", table_name="secret_audit_log")

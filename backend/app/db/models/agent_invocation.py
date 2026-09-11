@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,6 +44,11 @@ class AgentInvocation(Base):
         nullable=False,
     )
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    # NULL means "no AgentPricing row for this agent" -- deliberately distinct
+    # from Decimal("0") (an agent explicitly priced at zero). Mirrors the LLM
+    # Gateway's cost_ledger.cost_usd except for this one distinction, which that
+    # table doesn't make -- see app/services/agent_gateway/invocation_service.py.
+    cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     agent: Mapped["Agent | None"] = relationship(back_populates="invocations", lazy="raise_on_sql")

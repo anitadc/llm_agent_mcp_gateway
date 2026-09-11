@@ -32,6 +32,7 @@ const GROUPS = [
   {
     label: "Agent Gateway",
     links: [
+      { to: "/agent-catalog", label: "Agent Catalog", roles: null },
       { to: "/agents", label: "Agent Registry", roles: ["admin"] },
       { to: "/agent-approvals", label: "Agent Approvals", roles: ["admin"] },
     ],

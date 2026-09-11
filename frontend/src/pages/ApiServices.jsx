@@ -50,6 +50,26 @@ function toAuthConfig(form) {
   }
 }
 
+function serviceFormFromModel(service) {
+  const authConfig = service.auth_config || {};
+  return {
+    name: service.name,
+    base_url: service.base_url,
+    description: service.description || "",
+    authentication_type: service.authentication_type,
+    credential_ref: authConfig.credential_ref || "",
+    header_name: authConfig.header_name || "",
+    username_ref: authConfig.username_ref || "",
+    password_ref: authConfig.password_ref || "",
+    token_url: authConfig.token_url || "",
+    client_id_ref: authConfig.client_id_ref || "",
+    client_secret_ref: authConfig.client_secret_ref || "",
+    scope: authConfig.scope || "",
+    timeout_seconds: String(service.timeout_seconds),
+    rate_limit_per_window: service.rate_limit_per_window != null ? String(service.rate_limit_per_window) : "",
+  };
+}
+
 function emptyParamRow() {
   return { name: "", type: "string", required: false, location: "query" };
 }
@@ -71,26 +91,40 @@ export function ApiServices() {
   const { data: services, loading, refetch } = useApi(() => endpoints.listApiServices(), []);
   const { showToast } = useToast();
 
-  const [showCreate, setShowCreate] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [serviceForm, setServiceForm] = useState(emptyServiceForm());
   const [expandedId, setExpandedId] = useState(null);
   const [endpointsById, setEndpointsById] = useState({});
   const [endpointForm, setEndpointForm] = useState(emptyEndpointForm());
 
-  async function handleCreateService() {
-    if (!serviceForm.name || !serviceForm.base_url) return;
-    await endpoints.createApiService({
-      name: serviceForm.name,
-      base_url: serviceForm.base_url,
+  function openCreate() {
+    setEditingId("new");
+    setServiceForm(emptyServiceForm());
+  }
+
+  function openEdit(service) {
+    setEditingId(service.id);
+    setServiceForm(serviceFormFromModel(service));
+  }
+
+  async function handleSaveService() {
+    if (!serviceForm.base_url || (editingId === "new" && !serviceForm.name)) return;
+    const payload = {
       description: serviceForm.description || null,
+      base_url: serviceForm.base_url,
       authentication_type: serviceForm.authentication_type,
       auth_config: toAuthConfig(serviceForm),
       timeout_seconds: Number(serviceForm.timeout_seconds) || 10,
       rate_limit_per_window: serviceForm.rate_limit_per_window ? Number(serviceForm.rate_limit_per_window) : null,
-    });
-    showToast("REST API service registered", "success");
-    setServiceForm(emptyServiceForm());
-    setShowCreate(false);
+    };
+    if (editingId === "new") {
+      await endpoints.createApiService({ ...payload, name: serviceForm.name });
+      showToast("REST API service registered", "success");
+    } else {
+      await endpoints.updateApiService(editingId, payload);
+      showToast("REST API service updated", "success");
+    }
+    setEditingId(null);
     refetch();
   }
 
@@ -159,7 +193,7 @@ export function ApiServices() {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">API Service Registry</h2>
         <button
-          onClick={() => setShowCreate(true)}
+          onClick={openCreate}
           className="rounded bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         >
           Register REST API
@@ -196,6 +230,9 @@ export function ApiServices() {
                 <div className="flex gap-3 text-xs">
                   <button onClick={() => toggleExpand(s)} className="text-brand-600 hover:underline">
                     {expandedId === s.id ? "Hide endpoints" : "Manage endpoints"}
+                  </button>
+                  <button onClick={() => openEdit(s)} className="text-brand-600 hover:underline">
+                    Edit
                   </button>
                   <button onClick={() => handleDeleteService(s)} className="text-red-600 hover:underline">
                     Delete
@@ -348,15 +385,18 @@ export function ApiServices() {
         />
       )}
 
-      {showCreate && (
+      {editingId && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
-            <h3 className="mb-4 text-lg font-semibold">Register REST API service</h3>
+            <h3 className="mb-4 text-lg font-semibold">
+              {editingId === "new" ? "Register REST API service" : `Edit "${serviceForm.name}"`}
+            </h3>
             <input
               value={serviceForm.name}
+              disabled={editingId !== "new"}
               onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })}
               placeholder="Name (e.g. customer-service)"
-              className="mb-3 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              className="mb-3 w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
             />
             <input
               value={serviceForm.base_url}
@@ -459,11 +499,11 @@ export function ApiServices() {
             </div>
 
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowCreate(false)} className="rounded px-4 py-2 text-sm text-gray-600 hover:bg-gray-100">
+              <button onClick={() => setEditingId(null)} className="rounded px-4 py-2 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
-              <button onClick={handleCreateService} className="rounded bg-brand-600 px-4 py-2 text-sm text-white hover:bg-brand-700">
-                Register
+              <button onClick={handleSaveService} className="rounded bg-brand-600 px-4 py-2 text-sm text-white hover:bg-brand-700">
+                {editingId === "new" ? "Register" : "Save"}
               </button>
             </div>
           </div>

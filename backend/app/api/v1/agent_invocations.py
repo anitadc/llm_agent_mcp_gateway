@@ -1,16 +1,18 @@
 import time
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request
 
 from app.api.deps import get_agent_invocation_repo, get_agent_invocation_service, get_current_principal, get_policy_engine
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ForbiddenError
 from app.core.logging import get_logger, log_method
+from app.db.valkey import valkey_client
 from app.middleware.auth_middleware import Principal
 from app.repositories.agent_invocation_repo import AgentInvocationRepo
 from app.schemas.agent import AgentInvocationOut, InvokeRequest, InvokeResponse
 from app.services.agent_gateway.invocation_service import AgentInvocationService
+from app.services.cache_service import CacheService
 from app.services.logging_service import record_agent_invocation
 from app.services.policy_engine import PolicyEngine
 from app.services.rate_limit_service import RateLimitService
@@ -19,7 +21,12 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/v1/agent-invocations", tags=["agent_gateway"])
 
+@log_method(logger)
+def _idempotency_cache_key(principal: Principal, idempotency_key: str) -> str:
+    caller = principal.api_key.id if principal.kind == "api_key" and principal.api_key else principal.user.id
+    return f"agent-invoke-idempotency:{caller}:{idempotency_key}"
 
+@log_method(logger)
 def _identity(principal: Principal) -> tuple[uuid.UUID | None, uuid.UUID | None, uuid.UUID | None]:
     if principal.kind == "api_key":
         return principal.api_key.project_id, principal.api_key.id, None
@@ -36,17 +43,34 @@ async def invoke_agent(
     invocation_service: AgentInvocationService = Depends(get_agent_invocation_service),
     policy_engine: PolicyEngine = Depends(get_policy_engine),
     settings: Settings = Depends(get_settings),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> InvokeResponse:
     """The consumer-facing invocation contract: callers ask for a `capability`,
     never a target agent/endpoint/protocol -- the gateway resolves, authorizes,
     and dispatches. Mirrors mcp_gateway.py's `tools/call` handling: API keys
     carry their own scope (`agent:invoke`) and are never subject to the
     PolicyEngine; Identity-Provider-authenticated humans are gated by it,
-    evaluated over `agent_key` exactly like MCP tools are over `tool_name`."""
+    evaluated over `agent_key` exactly like MCP tools are over `tool_name`.
+
+    An optional `Idempotency-Key` header makes a repeated call with the same
+    key (from the same caller) return the first attempt's response without
+    re-invoking the agent -- useful for a caller retrying after a timeout
+    without risking a duplicate side-effecting call."""
     request_id = request.state.request_id
     start = time.perf_counter()
     project_id, api_key_id, user_id = _identity(principal)
-    logger.info("invoking agent", request_id=request_id, capability=body.capability, operation=body.operation, api_key_id=api_key_id, user_id=user_id)
+    logger.info("agent_invocation_requested", request_id=str(request_id), capability=body.capability)
+
+    # A dedicated CacheService, not the DI-injected one -- idempotency needs its
+    # own TTL (agent_idempotency_ttl_seconds, default a full day) independent of
+    # the general response-cache TTL the injected instance would use.
+    idempotency_cache = CacheService(valkey_client, ttl_seconds=settings.agent_idempotency_ttl_seconds)
+    idempotency_cache_key = _idempotency_cache_key(principal, idempotency_key) if idempotency_key else None
+    if idempotency_cache_key:
+        cached = await idempotency_cache.get(idempotency_cache_key)
+        if cached is not None:
+            logger.info("agent_invocation_idempotent_replay", request_id=str(request_id), idempotency_key=idempotency_key)
+            return InvokeResponse.model_validate(cached)
 
     if principal.kind == "api_key":
         if "agent:invoke" not in (principal.api_key.scopes or []):
@@ -68,6 +92,7 @@ async def invoke_agent(
         roles=roles,
         identity_provider=identity_provider,
         policy_engine=policy_engine,
+        project_id=project_id,
     )
 
     background_tasks.add_task(
@@ -82,6 +107,7 @@ async def invoke_agent(
         authorization_decision=result.authorization_decision,
         status=result.status,
         latency_ms=int((time.perf_counter() - start) * 1000),
+        cost_usd=result.cost_usd,
     )
 
     logger.info(
@@ -93,17 +119,21 @@ async def invoke_agent(
         latency_ms=int((time.perf_counter() - start) * 1000),
     )
 
-    return InvokeResponse(
+    response = InvokeResponse(
         invocation_id=request_id,
         status=result.status.value,
         target_agent_key=result.agent.agent_key if result.agent else None,
         target_agent_version=result.agent.version if result.agent else None,
-        protocol="REMOTE_HTTP",
+        protocol=result.agent.protocol.value if result.agent else "REMOTE_HTTP",
         authorization_decision=result.authorization_decision,
         latency_ms=int((time.perf_counter() - start) * 1000),
         result=result.result,
         error=result.error,
+        cost_usd=result.cost_usd,
     )
+    if idempotency_cache_key and result.status.value == "success":
+        await idempotency_cache.set(idempotency_cache_key, response.model_dump(mode="json"))
+    return response
 
 
 @router.get("", response_model=list[AgentInvocationOut])

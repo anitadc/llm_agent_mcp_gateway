@@ -33,14 +33,18 @@ from app.api.v1 import (
 )
 from app.core.config import get_settings
 from app.core.exceptions import GatewayException
-from app.core.logging import configure_logging, get_logger
-from app.db.schema_cleanup import drop_stale_updatedat_triggers
+from app.core.logging import configure_logging, get_logger, log_method
+#from app.db.schema_cleanup import drop_stale_updatedat_triggers
 from app.db.session import async_session_factory
 from app.middleware.auth_middleware import AuthMiddleware
 from app.middleware.rate_limit_middleware import RateLimitMiddleware
 from app.middleware.request_id_middleware import RequestIDMiddleware
+from app.repositories.agent_approval_task_repo import AgentApprovalTaskRepo
+from app.repositories.agent_repo import AgentRepo
 from app.repositories.mcp_server_repo import McpServerRepo
 from app.repositories.mcp_tool_repo import McpToolRepo
+from app.services.agent_gateway.approval_service import ApprovalService
+from app.services.agent_gateway.health_checker import AgentHealthChecker
 from app.services.mcp.discovery_service import DiscoveryService
 from app.services.mcp.health_checker import HealthChecker
 from app.services.mcp.mcp_client import McpClient
@@ -67,8 +71,10 @@ app.add_middleware(RequestIDMiddleware)
 
 _discovery_refresh_task: asyncio.Task | None = None
 _health_check_task: asyncio.Task | None = None
+_agent_health_check_task: asyncio.Task | None = None
+_agent_approval_sla_sweep_task: asyncio.Task | None = None
 
-
+@log_method(logger)
 async def _discovery_refresh_loop() -> None:
     """Periodic tool-registry refresh, in addition to the manual POST
     /mcp/tools/sync API -- keeps mcp_tools in sync with servers that add or
@@ -86,7 +92,7 @@ async def _discovery_refresh_loop() -> None:
         except Exception as exc:
             logger.exception("discovery_refresh_loop_failed", error=str(exc))
 
-
+@log_method(logger)
 async def _health_check_loop() -> None:
     """Lighter, more frequent liveness sweep than the full discovery sync -- just
     `initialize` against every active registry entry, so an outage is reflected in
@@ -103,33 +109,74 @@ async def _health_check_loop() -> None:
         except Exception as exc:
             logger.exception("health_check_loop_failed", error=str(exc))
 
+@log_method(logger)
+async def _agent_health_check_loop() -> None:
+    """Agent Registry analogue of _health_check_loop above -- periodic liveness
+    sweep across every active agent, independent of the manual
+    POST /v1/agents/{id}/health-check trigger."""
+    while True:
+        await asyncio.sleep(settings.agent_health_check_interval_seconds)
+        # Broad catch is deliberate: this loop must survive one bad health-check cycle
+        # and keep running on the next interval rather than dying silently forever.
+        try:
+            async with async_session_factory() as session:
+                health_checker = AgentHealthChecker(AgentRepo(session), settings.agent_invocation_timeout_seconds)
+                await health_checker.check_all()
+                await session.commit()
+        except Exception as exc:
+            logger.exception("agent_health_check_loop_failed", error=str(exc))
 
+@log_method(logger)
+async def _agent_approval_sla_sweep_loop() -> None:
+    """Flags pending AgentApprovalTasks past their SLA deadline so they're
+    visible (escalated_at + a warning log) instead of silently aging out with
+    no one noticing -- see ApprovalService.escalate_overdue."""
+    while True:
+        await asyncio.sleep(settings.agent_approval_sla_sweep_interval_seconds)
+        # Broad catch is deliberate: this loop must survive one bad sweep cycle and
+        # keep running on the next interval rather than dying silently forever.
+        try:
+            async with async_session_factory() as session:
+                approval = ApprovalService(
+                    AgentRepo(session), AgentApprovalTaskRepo(session), settings.agent_approval_stages
+                )
+                await approval.escalate_overdue()
+                await session.commit()
+        except Exception as exc:
+            logger.exception("agent_approval_sla_sweep_loop_failed", error=str(exc))
+
+@log_method(logger)
 async def _cancel_task(task: asyncio.Task | None) -> None:
     if task is not None:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
 
-
+@log_method(logger)
 @app.on_event("startup")
 async def _start_background_tasks() -> None:
-    global _discovery_refresh_task, _health_check_task
-    async with async_session_factory() as session:
-        await drop_stale_updatedat_triggers(session)
-        await session.commit()
-
+    global _discovery_refresh_task, _health_check_task, _agent_health_check_task, _agent_approval_sla_sweep_task
+    #async with async_session_factory() as session:
+        #await drop_stale_updatedat_triggers(session)
+       # await session.commit()
     if settings.mcp_discovery_refresh_seconds > 0:
         _discovery_refresh_task = asyncio.create_task(_discovery_refresh_loop())
     if settings.mcp_health_check_interval_seconds > 0:
         _health_check_task = asyncio.create_task(_health_check_loop())
+    if settings.agent_health_check_interval_seconds > 0:
+        _agent_health_check_task = asyncio.create_task(_agent_health_check_loop())
+    if settings.agent_approval_sla_sweep_interval_seconds > 0:
+        _agent_approval_sla_sweep_task = asyncio.create_task(_agent_approval_sla_sweep_loop())
 
-
+@log_method(logger)
 @app.on_event("shutdown")
 async def _stop_background_tasks() -> None:
     await _cancel_task(_discovery_refresh_task)
     await _cancel_task(_health_check_task)
+    await _cancel_task(_agent_health_check_task)
+    await _cancel_task(_agent_approval_sla_sweep_task)
 
-
+@log_method(logger)
 @app.exception_handler(GatewayException)
 async def gateway_exception_handler(request: Request, exc: GatewayException) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
@@ -144,7 +191,7 @@ async def gateway_exception_handler(request: Request, exc: GatewayException) -> 
         },
     )
 
-
+@log_method(logger)
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
