@@ -1,6 +1,5 @@
 import uuid
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import require_roles, get_user_repo
 from app.core.exceptions import NotFoundError
@@ -10,10 +9,15 @@ from app.db.models.user import User
 from app.repositories.user_repo import UserRepo
 from app.schemas.user import UserCreate, UserOut, UserUpdate
 
+from app.api.v1.keycloak import Keycloak
+from app.core.config import get_settings
+
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/v1/users", tags=["users"])
 
+settings = get_settings()
+IDENTITY_PROVIDER = settings.identity_provider
 
 @router.get("", response_model=list[UserOut])
 @log_method(logger)
@@ -37,6 +41,18 @@ async def create_user(
     logger.info("creating user", admin_user_id=user.id, email=body.email, role=body.role.value, organization_id=str(body.organization_id) if body.organization_id else None)
     new_user = await repo.add(User(email=body.email, role=body.role, organization_id=body.organization_id))
     logger.info("user_created", user_id=str(new_user.id), role=new_user.role.value)
+
+    if IDENTITY_PROVIDER == "keycloak":
+        try:
+            admin_token = await Keycloak.get_keycloak_admin_token()
+            await Keycloak.create_keycloak_user(admin_token=admin_token, body=body)
+        except Exception as exc:
+            logger.error("keycloak_connection_error", error=str(exc))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="User saved to database, but Keycloak server was unreachable.",
+            )
+
     return UserOut.model_validate(new_user)
 
 
