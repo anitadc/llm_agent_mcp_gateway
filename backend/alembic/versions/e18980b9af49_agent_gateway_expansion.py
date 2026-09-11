@@ -1,7 +1,7 @@
 """agent gateway expansion
 
 Revision ID: e18980b9af49
-Revises: 2e452ff8ad8e
+Revises: 0007
 Create Date: 2026-09-09 14:58:23.338466
 
 """
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = 'e18980b9af49'
-down_revision: Union[str, None] = '2e452ff8ad8e'
+down_revision: Union[str, None] = '0007'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
