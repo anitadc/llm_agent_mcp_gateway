@@ -12,7 +12,7 @@ from app.core.logging import get_logger, log_method
 from app.db.models.api_endpoint import ApiEndpoint
 from app.db.models.api_service import ApiService
 from app.db.models.enums import RestAuthType, RestHttpMethod
-from app.db.valkey import valkey_client
+from app.db.valkey import ValkeyUtil
 from app.secrets.service import SecretService
 from app.services.api_registry.schema_converter import rest_response_to_mcp_content
 
@@ -56,7 +56,7 @@ class RestExecutor:
 
     def __init__(self, secret_service: SecretService, cache_client: redis.Redis | None = None) -> None:
         self.secret_service = secret_service
-        self.cache_client = cache_client or valkey_client
+        self.cache_client = cache_client #or asyncio.get_event_loop().run_until_complete(ValkeyUtil.get_valkey())
 
     @log_method(logger)
     async def execute(
@@ -200,6 +200,8 @@ class RestExecutor:
         busy tool doesn't re-authenticate on every single call -- the same
         bounded-cache tradeoff SecretService makes for secret values."""
         cache_key = f"oauth2-token:{service.id}"
+        if self.cache_client is None:
+            self.cache_client = await ValkeyUtil.get_valkey()
         cached = await self.cache_client.get(cache_key)
         if cached:
             return cached
@@ -229,5 +231,7 @@ class RestExecutor:
             raise ProviderError(f"OAuth2 client-credentials exchange for '{service.name}' returned no access_token")
 
         ttl = max(int(payload.get("expires_in", _OAUTH2_TOKEN_CACHE_TTL_FALLBACK_SECONDS)) - _OAUTH2_TOKEN_EXPIRY_SAFETY_MARGIN_SECONDS, 30)
+        if self.cache_client is None:
+            self.cache_client = await ValkeyUtil.get_valkey()
         await self.cache_client.set(cache_key, access_token, ex=ttl)
         return access_token

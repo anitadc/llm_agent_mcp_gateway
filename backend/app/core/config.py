@@ -33,17 +33,18 @@ class Settings(BaseSettings):
         encoded_schema = schema.replace(" ", "").replace(",", "%2C")
         return f"{url}{separator}options=-c search_path={encoded_schema}"
 
-    valkey_host: str = "localhost"
-    valkey_port: int = 6379
-    valkey_db: int = 0
+    valkey_host: str | None = None
+    valkey_port: int | None = None
+    valkey_db: int | None = None
     valkey_user: str | None = None
     valkey_password: str | None = None
     valkey_url: str | None = None
-    cache_ttl_seconds: int = 300
-    rate_limit_window_seconds: int = 60
+    valkey_enabled: bool | None = None
+    cache_ttl_seconds: int | None = None
+    rate_limit_window_seconds: int | None = None
 
-    window_minutes: int = 30
-    min_samples: int = 3
+    window_minutes: int | None = None
+    min_samples: int | None = None
 
     # --- Identity Provider layer (app/identity/) ---
     # Keycloak remains the default; its own settings below double as
@@ -57,7 +58,7 @@ class Settings(BaseSettings):
     # docs/identity-provider-architecture.md. Set to None to disable the global
     # identity provider entirely for deployments that use only API keys or
     # per-tenant identity configuration.
-    identity_provider: Literal["keycloak", "entra", "auth0", "okta", "aws_identity", "google", "local"] = "keycloak"
+    identity_provider: Literal["keycloak", "entra", "auth0", "okta", "aws_identity", "google", "local"] = "local"
 
     keycloak_base_url: str = "http://keycloak:8080"
     keycloak_realm: str = "gateway"
@@ -192,7 +193,13 @@ class Settings(BaseSettings):
     @field_validator("valkey_url", mode="before")
     @classmethod
     def build_valkey_url(cls, value, info):
-        if value is not None and str(value).strip():
+        if value is not None:
+            s = str(value).strip()
+            if not s:
+                # Explicitly empty value treated as no Valkey configured
+                return None
+            if s.lower() in {"none", "null"}:
+                return None
             return value
 
         data = info.data

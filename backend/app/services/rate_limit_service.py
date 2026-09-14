@@ -5,7 +5,7 @@ import redis.asyncio as redis
 from app.core.config import get_settings
 from app.core.exceptions import RateLimitError
 from app.core.logging import get_logger, log_method
-from app.db.valkey import valkey_client
+from app.db.valkey import ValkeyUtil
 
 logger = get_logger(__name__)
 
@@ -22,7 +22,7 @@ DEFAULT_REQUESTS_PER_WINDOW = 60
 
 class RateLimitService:
     def __init__(self, client: redis.Redis | None = None, window_seconds: int | None = None) -> None:
-        self.client = client or valkey_client
+        self.client = client #or asyncio.get_event_loop().run_until_complete(ValkeyUtil.get_valkey())
         self.window_seconds = window_seconds if window_seconds is not None else get_settings().rate_limit_window_seconds
         self._script = self.client.register_script(_INCR_AND_EXPIRE)
 
@@ -31,6 +31,9 @@ class RateLimitService:
         window_start = int(time.time() // self.window_seconds)
         redis_key = f"ratelimit:{key_id}:{window_start}"
         try:
+            if self.client is None:
+                self.client = await ValkeyUtil.get_valkey()
+            self._script = self.client.register_script(_INCR_AND_EXPIRE)
             count = await self._script(keys=[redis_key], args=[self.window_seconds * 1000])
         except redis.exceptions.RedisError:
             # Fail closed: the limiter backend being unreachable is treated as a hard

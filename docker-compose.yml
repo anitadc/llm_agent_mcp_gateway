@@ -108,7 +108,7 @@ services:
     # command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level ${LOG_LEVEL:-debug}"
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
-      DATABASE_URL: postgresql+asyncpg://gateway:gateway@postgres:5432/gateway?options=-c search_path=ai_gateway
+      DATABASE_URL: postgresql+asyncpg://gateway:gateway@postgres:5432/gateway
       database_schema: ${database_schema:-ai_gateway}
       VALKEY_HOST: ${VALKEY_HOST:-valkey}
       VALKEY_PORT: ${VALKEY_PORT:-6379}
@@ -116,6 +116,7 @@ services:
       VALKEY_USER: ${VALKEY_USER:-}
       VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
       VALKEY_URL: ${VALKEY_URL:-redis://valkey:6379/0}
+      VALKEY_ENABLED: ${VALKEY_ENABLED:-true}
       # Must match the host the BROWSER uses to reach Keycloak (localhost:8180,
       # not the Docker-internal "keycloak:8080") -- this is what every token's
       # `iss` claim actually contains, since Keycloak stamps the issuer from the
