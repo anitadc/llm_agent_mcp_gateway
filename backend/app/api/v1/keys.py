@@ -8,7 +8,6 @@ from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger, log_method
 from app.db.models.enums import UserRole
 from app.db.models.user import User
-from app.db.valkey import valkey_client
 from app.repositories.api_key_repo import ApiKeyRepo
 from app.repositories.user_repo import UserRepo
 from app.schemas.api_key import ApiKeyCreate, ApiKeyOut
@@ -39,7 +38,7 @@ async def create_key(
     settings: Settings = Depends(get_settings),
 ) -> ApiKeyOut:
     logger.info("issuing API key", user_id=user.id, project_id=str(body.project_id), name=body.name, scopes=body.scopes)
-    auth_service = AuthService(repo, UserRepo(repo.db), CacheService(valkey_client), settings)
+    auth_service = AuthService(repo, UserRepo(repo.db), CacheService(None, ttl_seconds=settings.cache_ttl_seconds), settings)
     api_key, raw_key = await auth_service.issue_api_key(body.name, body.project_id, body.scopes)
     logger.info("api_key_created", api_key_id=str(api_key.id), project_id=str(body.project_id))
     out = ApiKeyOut.model_validate(api_key)
@@ -59,6 +58,6 @@ async def revoke_key(
     api_key = await repo.get(key_id)
     if api_key is None:
         raise NotFoundError("API key not found")
-    auth_service = AuthService(repo, UserRepo(repo.db), CacheService(valkey_client), settings)
+    auth_service = AuthService(repo, UserRepo(repo.db), CacheService(None, ttl_seconds=settings.cache_ttl_seconds), settings)
     await auth_service.revoke_api_key(api_key)
     logger.info("api_key_revoked", api_key_id=str(key_id))

@@ -7,7 +7,6 @@ from app.api.deps import get_agent_invocation_repo, get_agent_invocation_service
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ForbiddenError
 from app.core.logging import get_logger, log_method
-from app.db.valkey import valkey_client
 from app.middleware.auth_middleware import Principal
 from app.repositories.agent_invocation_repo import AgentInvocationRepo
 from app.schemas.agent import AgentInvocationOut, InvokeRequest, InvokeResponse
@@ -64,7 +63,7 @@ async def invoke_agent(
     # A dedicated CacheService, not the DI-injected one -- idempotency needs its
     # own TTL (agent_idempotency_ttl_seconds, default a full day) independent of
     # the general response-cache TTL the injected instance would use.
-    idempotency_cache = CacheService(valkey_client, ttl_seconds=settings.agent_idempotency_ttl_seconds)
+    idempotency_cache = CacheService(None, ttl_seconds=settings.agent_idempotency_ttl_seconds)
     idempotency_cache_key = _idempotency_cache_key(principal, idempotency_key) if idempotency_key else None
     if idempotency_cache_key:
         cached = await idempotency_cache.get(idempotency_cache_key)

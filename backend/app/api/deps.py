@@ -10,7 +10,6 @@ from app.db.models.api_key import ApiKey
 from app.db.models.enums import UserRole
 from app.db.models.user import User
 from app.db.session import get_db
-from app.db.valkey import valkey_client
 from app.middleware.auth_middleware import Principal
 from app.repositories.agent_approval_comment_repo import AgentApprovalCommentRepo
 from app.repositories.agent_approval_task_repo import AgentApprovalTaskRepo
@@ -128,8 +127,8 @@ def require_mcp_scope(scope: str) -> Callable[[Principal], Principal]:
 
 @log_method(logger)
 async def get_cache_service() -> AsyncGenerator[CacheService, None]:
-    yield CacheService(valkey_client)
-
+    yield CacheService(None, ttl_seconds=get_settings().cache_ttl_seconds)
+    
 @log_method(logger)
 def get_guardrails_client(settings: Settings = Depends(get_settings)) -> GuardrailsClient:
     return HttpGuardrailsClient(settings)

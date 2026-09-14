@@ -10,7 +10,6 @@ from app.core.logging import get_logger
 from app.db.models.api_key import ApiKey
 from app.db.models.user import User
 from app.db.session import async_session_factory
-from app.db.valkey import valkey_client
 from app.identity.factory import build_provider_from_tenant_config, get_identity_provider, peek_unverified_issuer
 from app.identity.models import UserIdentity
 from app.repositories.api_key_repo import ApiKeyRepo
@@ -51,7 +50,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         settings = get_settings()
         async with async_session_factory() as session:
-            auth_service = AuthService(ApiKeyRepo(session), UserRepo(session), CacheService(valkey_client), settings)
+            auth_service = AuthService(ApiKeyRepo(session), UserRepo(session), CacheService(None, ttl_seconds=settings.cache_ttl_seconds), settings)
             try:
                 if token.startswith(f"{settings.api_key_prefix}_"):
                     api_key = await auth_service.verify_api_key(token)

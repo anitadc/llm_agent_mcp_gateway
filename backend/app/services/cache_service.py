@@ -6,14 +6,14 @@ import redis.asyncio as redis
 
 from app.core.config import get_settings
 from app.core.logging import get_logger, log_method
-from app.db.valkey import valkey_client
+from app.db.valkey import ValkeyUtil
 
 logger = get_logger(__name__)
 
 
 class CacheService:
     def __init__(self, client: redis.Redis | None = None, ttl_seconds: int | None = None) -> None:
-        self.client = client or valkey_client
+        self.client = client #or asyncio.get_event_loop().run_until_complete(ValkeyUtil.get_valkey())
         self.ttl_seconds = ttl_seconds if ttl_seconds is not None else get_settings().cache_ttl_seconds
 
     @staticmethod
@@ -29,6 +29,8 @@ class CacheService:
         failing the caller -- the cache is a performance optimization, not a source
         of truth, so callers should fall through to their own lookup."""
         try:
+            if self.client is None:
+                self.client = await ValkeyUtil.get_valkey()
             raw = await self.client.get(key)
         except redis.exceptions.RedisError as exc:
             logger.warning("cache_backend_unavailable", operation="get", error=str(exc))
@@ -38,6 +40,8 @@ class CacheService:
     @log_method(logger)
     async def set(self, key: str, value: dict[str, Any]) -> None:
         try:
+            if self.client is None:
+                self.client = await ValkeyUtil.get_valkey()
             await self.client.set(key, json.dumps(value, default=str), ex=self.ttl_seconds)
         except redis.exceptions.RedisError as exc:
             logger.warning("cache_backend_unavailable", operation="set", error=str(exc))
@@ -47,6 +51,8 @@ class CacheService:
         """Same degrade-to-miss behavior as `get`, for callers storing plain string
         values (e.g. an id) rather than a JSON payload."""
         try:
+            if self.client is None:
+                self.client = await ValkeyUtil.get_valkey()
             return await self.client.get(key)
         except redis.exceptions.RedisError as exc:
             logger.warning("cache_backend_unavailable", operation="get_raw", error=str(exc))
@@ -55,6 +61,8 @@ class CacheService:
     @log_method(logger)
     async def set_raw(self, key: str, value: str) -> None:
         try:
+            if self.client is None:
+                self.client = await ValkeyUtil.get_valkey()
             await self.client.set(key, value, ex=self.ttl_seconds)
         except redis.exceptions.RedisError as exc:
             logger.warning("cache_backend_unavailable", operation="set_raw", error=str(exc))
@@ -62,6 +70,8 @@ class CacheService:
     @log_method(logger)
     async def delete(self, key: str) -> None:
         try:
+            if self.client is None:
+                self.client = await ValkeyUtil.get_valkey()
             await self.client.delete(key)
         except redis.exceptions.RedisError as exc:
             logger.warning("cache_backend_unavailable", operation="delete", error=str(exc))

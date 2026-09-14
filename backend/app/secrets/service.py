@@ -1,8 +1,10 @@
+import asyncio
+
 import redis.asyncio as redis
 
 from app.core.config import Settings
 from app.core.logging import get_logger, log_method
-from app.db.valkey import valkey_client
+from app.db.valkey import ValkeyUtil
 from app.secrets.base import SecretProvider
 
 logger = get_logger(__name__)
@@ -30,7 +32,7 @@ class SecretService:
         self.provider = provider
         self.provider_name = provider_name
         self.cache_ttl_seconds = settings.secret_cache_ttl_seconds
-        self.client = client or valkey_client
+        self.client = client #or asyncio.get_event_loop().run_until_complete(ValkeyUtil.get_valkey())
 
     @staticmethod
     def _cache_key(secret_name: str, tenant: str | None) -> str:
@@ -41,6 +43,8 @@ class SecretService:
         caller -- the cache is a latency optimization in front of the real secret
         provider, not the source of truth."""
         try:
+            if self.client is None:
+                self.client = await ValkeyUtil.get_valkey()
             return await self.client.get(cache_key)
         except redis.exceptions.RedisError as exc:
             logger.warning("secret_cache_unavailable", operation="get", error=str(exc))
@@ -53,6 +57,8 @@ class SecretService:
         cached value for up to `cache_ttl_seconds`, an already-accepted tradeoff
         (see class docstring)."""
         try:
+            if self.client is None:
+                self.client = await ValkeyUtil.get_valkey()
             if value is None:
                 await self.client.delete(cache_key)
             else:

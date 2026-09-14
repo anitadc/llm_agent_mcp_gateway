@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger, log_method
-from app.db.valkey import valkey_client
+from app.db.valkey import ValkeyUtil
 
 logger = get_logger(__name__)
 
@@ -34,11 +34,14 @@ async def get_readiness(
     except SQLAlchemyError as exc:
         logger.warning("readiness_check_failed", dependency="db", error=str(exc))
 
-    try:
-        await valkey_client.ping()
-        statuses["valkey"] = "ok"
-    except redis.exceptions.RedisError as exc:
-        logger.warning("readiness_check_failed", dependency="valkey", error=str(exc))
+    if not settings.valkey_enabled:
+        statuses["valkey"] = "skipped"
+    else:
+        try:
+            await (await ValkeyUtil.get_valkey()).ping()
+            statuses["valkey"] = "ok"
+        except redis.exceptions.RedisError as exc:
+            logger.warning("readiness_check_failed", dependency="valkey", error=str(exc))
 
     async with httpx.AsyncClient(timeout=2.0) as client:
         try:
