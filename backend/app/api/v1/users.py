@@ -46,6 +46,9 @@ async def create_user(
         try:
             admin_token = await Keycloak.get_keycloak_admin_token()
             await Keycloak.create_keycloak_user(admin_token=admin_token, body=body)
+            realm_roles = await Keycloak.get_realm_roles(admin_token=admin_token)
+            user = await Keycloak.get_keycloak_user_by_username(admin_token=admin_token, username=body.email.split("@")[0])
+            await Keycloak.assign_realm_roles(admin_token=admin_token, user_id=user[0]["id"], realm_roles=realm_roles, assign_role=body.role)
         except Exception as exc:
             logger.error("keycloak_connection_error", error=str(exc))
             raise HTTPException(
