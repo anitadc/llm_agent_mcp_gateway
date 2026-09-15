@@ -109,8 +109,8 @@ class AgentRegistryService:
         await self.agent_repo.db.refresh(agent)
         logger.info("agent_retired", agent_key=agent.agent_key)
         return agent
-	
-	@log_method(logger)
+
+    @log_method(logger)
     async def enable_for_project(self, agent: Agent, project_id: uuid.UUID, enabled_by_user_id: uuid.UUID) -> None:
         """Opts a project in to a `private`-visibility agent -- a no-op (but not
         an error) for a `published` agent, which every project can already use."""
@@ -126,7 +126,7 @@ class AgentRegistryService:
         )
         logger.info("agent_enabled_for_project", agent_key=agent.agent_key, project_id=str(project_id))
 
-	@log_method(logger)
+    @log_method(logger)
     async def disable_for_project(self, agent: Agent, project_id: uuid.UUID) -> None:
         if self.enablement_repo is None:
             raise BadRequestError("Project enablement is not available on this AgentRegistryService instance")

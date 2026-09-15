@@ -85,7 +85,7 @@ class AgentInvocationService:
             return False
         return await self.enablement_repo.is_enabled(agent.id, project_id)
 
-	@log_method(logger)
+    @log_method(logger)
     async def invoke(
         self,
         *,
@@ -167,7 +167,7 @@ class AgentInvocationService:
         result.cost_usd = pricing.cost_per_invocation
         return result
 
-	@log_method(logger)
+    @log_method(logger)
     async def _dispatch(self, agent: Agent, operation: str | None, payload: dict[str, Any]) -> AgentInvocationResult:
         if not agent.endpoint_url:
             return AgentInvocationResult(
@@ -235,7 +235,7 @@ class AgentInvocationService:
         )
 
     @staticmethod
-	@log_method(logger)
+    @log_method(logger)
     def _a2a_envelope(operation: str | None, payload: dict[str, Any]) -> dict[str, Any]:
         """A best-effort Agent2Agent (A2A) protocol `message/send` JSON-RPC 2.0
         envelope -- NOT verified against a live A2A server (Future Capability,
@@ -252,7 +252,7 @@ class AgentInvocationService:
         }
 
     @staticmethod
-	@log_method(logger)
+    @log_method(logger)
     def _parse_body(response: httpx.Response) -> Any:
         if not response.content:
             return None

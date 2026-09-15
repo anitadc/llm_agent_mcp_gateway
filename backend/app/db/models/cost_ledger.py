@@ -1,3 +1,4 @@
+from typing import Optional
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -22,7 +23,7 @@ class CostLedger(Base):
     organization_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)

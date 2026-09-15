@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, List
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -18,10 +18,10 @@ class RequestLog(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     request_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), unique=True, nullable=False)
-    api_key_id: Mapped[uuid.UUID | None] = mapped_column(
+    api_key_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("api_keys.id", ondelete="SET NULL"), nullable=True
     )
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     project_id: Mapped[uuid.UUID] = mapped_column(
@@ -36,8 +36,8 @@ class RequestLog(Base):
         nullable=False,
         default=ModelCapability.chat,
     )
-    resolved_provider: Mapped[str | None] = mapped_column(String, nullable=True)
-    resolved_model: Mapped[str | None] = mapped_column(String, nullable=True)
+    resolved_provider: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    resolved_model: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     status: Mapped[RequestStatus] = mapped_column(
         Enum(RequestStatus, name="request_status", values_callable=lambda e: [m.value for m in e]),
         nullable=False,
@@ -48,6 +48,6 @@ class RequestLog(Base):
     cache_hit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    guardrail_results: Mapped[list["GuardrailResult"]] = relationship(
+    guardrail_results: Mapped[List["GuardrailResult"]] = relationship(
         back_populates="request_log", lazy="raise_on_sql"
     )

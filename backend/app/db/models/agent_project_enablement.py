@@ -1,3 +1,4 @@
+from typing import Optional
 import uuid
 from datetime import datetime
 
@@ -23,7 +24,7 @@ class AgentProjectEnablement(Base):
     project_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
     )
-    enabled_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+    enabled_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

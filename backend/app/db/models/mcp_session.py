@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -19,10 +19,10 @@ class McpSession(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     client_session_id: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    project_id: Mapped[uuid.UUID | None] = mapped_column(
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
     )
-    api_key_id: Mapped[uuid.UUID | None] = mapped_column(
+    api_key_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("api_keys.id", ondelete="SET NULL"), nullable=True
     )
     # {server_id (str): server_session_id (str)}

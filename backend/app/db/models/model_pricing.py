@@ -1,3 +1,4 @@
+from typing import Optional
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -21,5 +22,5 @@ class ModelPricing(Base):
     )
     model: Mapped[str] = mapped_column(String, nullable=False)
     prompt_per_1k: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
-    completion_per_1k: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    completion_per_1k: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 6), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

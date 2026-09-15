@@ -16,13 +16,13 @@ class AgentRepo(BaseRepository[Agent]):
     async def get_by_key(self, agent_key: str) -> Agent | None:
         result = await self.db.execute(select(Agent).where(Agent.agent_key == agent_key))
         return result.scalar_one_or_none()
-
-	@log_method(logger)
+        
+    @log_method(logger)
     async def list_active(self) -> list[Agent]:
         result = await self.db.execute(select(Agent).where(Agent.status == AgentLifecycleStatus.active))
         return list(result.scalars().all())
 
-	@log_method(logger)
+    @log_method(logger)
     async def list_by_capability(self, capability: str, status: AgentLifecycleStatus) -> list[Agent]:
         """Ordered by `priority` ascending -- lower number wins, same convention
         as RoutingRule target `weight` -- so the invocation service can just take
@@ -36,7 +36,7 @@ class AgentRepo(BaseRepository[Agent]):
         result = await self.db.execute(select(Agent).where(Agent.status == status).order_by(Agent.priority.asc()))
         return [agent for agent in result.scalars().all() if capability in agent.capabilities]
 
-	@log_method(logger)
+    @log_method(logger)
     async def list_for_catalog(self) -> list[Agent]:
         """Every agent a marketplace browsing view could ever show -- active
         (routable now) or deprecated (still visible, with its deprecation notice,

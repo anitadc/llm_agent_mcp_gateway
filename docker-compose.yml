@@ -137,6 +137,7 @@ services:
       # switch IDENTITY_PROVIDER + the matching block below to run against an
       # enterprise IdP instead. See docs/identity-provider-architecture.md.
       IDENTITY_PROVIDER: ${IDENTITY_PROVIDER:-local}
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me}
       ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:-}
       ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:-}
       AUTH0_DOMAIN: ${AUTH0_DOMAIN:-}
@@ -176,14 +177,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      valkey:
-        condition: service_healthy
-      keycloak:
-        condition: service_started
+      # valkey:
+      #   condition: service_healthy
+      # keycloak:
+      #   condition: service_started
       guardrails-mock:
         condition: service_started
-      infisical:
-        condition: service_started
+      # infisical:
+      #   condition: service_started
 
   gateway-frontend:
     build:

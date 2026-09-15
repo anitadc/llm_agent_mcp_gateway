@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime, ForeignKey, Text, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -23,7 +23,7 @@ class AgentApprovalComment(Base):
     task_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent_approval_tasks.id", ondelete="CASCADE"), nullable=False
     )
-    author_user_id: Mapped[uuid.UUID | None] = mapped_column(
+    author_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     body: Mapped[str] = mapped_column(Text, nullable=False)

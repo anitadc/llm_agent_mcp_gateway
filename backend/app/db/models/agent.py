@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import ARRAY, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -34,9 +34,9 @@ class Agent(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_key: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    owner_team: Mapped[str | None] = mapped_column(String, nullable=True)
-    domain: Mapped[str | None] = mapped_column(String, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    owner_team: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    domain: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     version: Mapped[str] = mapped_column(String, nullable=False, default="1.0.0")
 
     # Which capability keys a consumer's InvokeRequest.capability can resolve to
@@ -69,7 +69,7 @@ class Agent(Base):
     # remote invocation via that mode and the LangGraph same-process boundary are
     # otherwise still evolving (see docs/agent-gateway.md). endpoint_url is
     # required before an agent can publish either way.
-    endpoint_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    endpoint_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     protocol: Mapped[AgentProtocol] = mapped_column(
         Enum(AgentProtocol, name="agent_protocol", values_callable=lambda e: [m.value for m in e]),
         nullable=False,
@@ -95,12 +95,12 @@ class Agent(Base):
         nullable=False,
         default=AgentVisibility.published,
     )
-    project_id: Mapped[uuid.UUID | None] = mapped_column(
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
     )
     # Surfaced to consumers of the catalog once status == deprecated; purely
     # informational, never enforced.
-    deprecation_notice: Mapped[str | None] = mapped_column(Text, nullable=True)
+    deprecation_notice: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Liveness as observed by the last probe (see
     # services/agent_gateway/health_checker.py) -- unknown until the first probe.
@@ -109,14 +109,14 @@ class Agent(Base):
         nullable=False,
         default=AgentHealthStatus.unknown,
     )
-    last_heartbeat: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_heartbeat: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Incremented once per submit_for_approval call and stamped onto every
     # AgentApprovalTask it creates, so a rejected-then-resubmitted agent's review
     # history groups cleanly into rounds instead of one flat undifferentiated list.
     current_submission_round: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    submitted_by: Mapped[uuid.UUID | None] = mapped_column(
+    submitted_by: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 

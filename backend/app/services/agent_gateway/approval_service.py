@@ -130,7 +130,7 @@ class ApprovalService:
             logger.info("agent_approved", agent_key=agent.agent_key)
         return task
 
-	@log_method(logger)
+    @log_method(logger)
     async def assign_reviewer(self, task: AgentApprovalTask, reviewer_user_id: uuid.UUID | None) -> AgentApprovalTask:
         task.assigned_reviewer_user_id = reviewer_user_id
         await self.task_repo.db.flush()
@@ -140,15 +140,15 @@ class ApprovalService:
             reviewer_user_id=str(reviewer_user_id) if reviewer_user_id else None,
         )
         return task
-
-	@log_method(logger)
+        
+    @log_method(logger)
     async def add_evidence_links(self, task: AgentApprovalTask, links: list[str]) -> AgentApprovalTask:
         task.evidence_links = [*task.evidence_links, *links]
         await self.task_repo.db.flush()
         logger.info("agent_approval_evidence_added", task_id=str(task.id), link_count=len(links))
         return task
 
-	@log_method(logger)
+    @log_method(logger)
     async def add_comment(self, task: AgentApprovalTask, author_user_id: uuid.UUID | None, body: str) -> AgentApprovalComment:
         if self.comment_repo is None:
             raise BadRequestError("Approval comments are not available on this ApprovalService instance")
@@ -157,8 +157,8 @@ class ApprovalService:
         )
         logger.info("agent_approval_comment_added", task_id=str(task.id))
         return comment
-
-	@log_method(logger)
+        
+    @log_method(logger)
     async def escalate_overdue(self) -> list[AgentApprovalTask]:
         """The SLA sweep's core: find every pending task past its due_at that
         hasn't been flagged yet, mark it escalated, and log it -- there's no

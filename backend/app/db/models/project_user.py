@@ -1,3 +1,4 @@
+from typing import Optional
 import uuid
 from datetime import date, datetime
 
@@ -28,5 +29,5 @@ class ProjectUser(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     start_date: Mapped[date] = mapped_column(Date, nullable=False, server_default=func.current_date())
-    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

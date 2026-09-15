@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -20,11 +20,11 @@ class AgentAuditLog(Base):
     __tablename__ = "agent_audit_log"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+    agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True
     )
     action: Mapped[str] = mapped_column(String, nullable=False)
-    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+    actor_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     details: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import DateTime, Enum, Float, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -24,7 +24,7 @@ class ApiService(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     base_url: Mapped[str] = mapped_column(String, nullable=False)
 
     authentication_type: Mapped[RestAuthType] = mapped_column(
@@ -50,7 +50,7 @@ class ApiService(Base):
     retry_policy: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     # Per-service request budget for the rate limiter; None falls back to the
     # gateway's mcp_default_rate_limit_per_window, same convention as tools.
-    rate_limit_per_window: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rate_limit_per_window: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     status: Mapped[ApiServiceStatus] = mapped_column(
         Enum(ApiServiceStatus, name="api_service_status", values_callable=lambda e: [m.value for m in e]),

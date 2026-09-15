@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -24,18 +24,18 @@ class AgentInvocation(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     request_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), unique=True, nullable=False)
-    api_key_id: Mapped[uuid.UUID | None] = mapped_column(
+    api_key_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("api_keys.id", ondelete="SET NULL"), nullable=True
     )
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    project_id: Mapped[uuid.UUID | None] = mapped_column(
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
     )
     capability: Mapped[str] = mapped_column(String, nullable=False)
-    operation: Mapped[str | None] = mapped_column(String, nullable=True)
-    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+    operation: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True
     )
     authorization_decision: Mapped[str] = mapped_column(String, nullable=False)
@@ -48,7 +48,7 @@ class AgentInvocation(Base):
     # from Decimal("0") (an agent explicitly priced at zero). Mirrors the LLM
     # Gateway's cost_ledger.cost_usd except for this one distinction, which that
     # table doesn't make -- see app/services/agent_gateway/invocation_service.py.
-    cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    cost_usd: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 6), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    agent: Mapped["Agent | None"] = relationship(back_populates="invocations", lazy="raise_on_sql")
+    agent: Mapped[Optional["Agent"]] = relationship(back_populates="invocations", lazy="raise_on_sql")

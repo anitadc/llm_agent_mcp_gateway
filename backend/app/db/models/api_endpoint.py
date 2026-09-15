@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -29,7 +29,7 @@ class ApiEndpoint(Base):
         UUID(as_uuid=True), ForeignKey("api_services.id", ondelete="CASCADE"), nullable=False
     )
     tool_name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     method: Mapped[RestHttpMethod] = mapped_column(
         Enum(RestHttpMethod, name="rest_http_method", values_callable=lambda e: [m.value for m in e]),
         nullable=False,
@@ -45,4 +45,4 @@ class ApiEndpoint(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     api_service: Mapped["ApiService"] = relationship(back_populates="endpoints", lazy="raise_on_sql")
-    mcp_tool: Mapped["McpTool | None"] = relationship(back_populates="api_endpoint", lazy="raise_on_sql")
+    mcp_tool: Mapped["Optional[McpTool]"] = relationship(back_populates="api_endpoint", lazy="raise_on_sql")
