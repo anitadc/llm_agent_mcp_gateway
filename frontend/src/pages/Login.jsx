@@ -137,7 +137,7 @@ export function Login() {
             {success ? (
               <div className="space-y-3">
                 <p className="text-sm text-green-600">Token issued and session established.</p>
-                <button type="button" onClick={() => navigate("/")} className="w-full rounded bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+                <button type="button" onClick={() => window.location.reload()} className="w-full rounded bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
                   Continue
                 </button>
               </div>

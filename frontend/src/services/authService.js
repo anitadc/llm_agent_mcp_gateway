@@ -68,6 +68,7 @@ function login() {
 function logout() {
   if (isKeycloakConfigured) return keycloak.logout({ redirectUri: window.location.origin });
   _localSetToken(null);
+  window.location.reload()
   return null;
 }
 

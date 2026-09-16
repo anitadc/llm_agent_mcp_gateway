@@ -56,7 +56,13 @@
       "credentials": [
         { "type": "password", "value": "admin123", "temporary": false }
       ],
-      "realmRoles": ["admin"]
+      "realmRoles": ["admin"],
+      "clientRoles": {
+        "realm-management": [
+          "manage-realm",
+          "manage-users"
+        ]
+      }
     },
     {
       "username": "team_lead@tcsaigateway.local",
