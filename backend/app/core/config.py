@@ -58,15 +58,15 @@ class Settings(BaseSettings):
     # docs/identity-provider-architecture.md. Set to None to disable the global
     # identity provider entirely for deployments that use only API keys or
     # per-tenant identity configuration.
-    identity_provider: Literal["keycloak", "entra", "auth0", "okta", "aws_identity", "google", "local"] = "local"
+    identity_provider: Literal["keycloak", "entra", "auth0", "okta", "aws_identity", "google", "local"] | None = None
 
-    keycloak_base_url: str = "http://keycloak:8080"
-    keycloak_realm: str = "gateway"
-    keycloak_client_id: str = "gateway-frontend"
-    keycloak_jwks_url: str = ""
-    keycloak_audience: str
-    keycloak_admin_user: str = "admin@gateway.local"
-    keycloak_admin_pass: str = "admin123"
+    keycloak_base_url: str | None = None
+    keycloak_realm: str | None = None
+    keycloak_client_id: str | None = None
+    keycloak_jwks_url: str | None = None
+    keycloak_audience: str | None = None
+    keycloak_admin_user: str | None = None
+    keycloak_admin_pass: str | None = None
 
     entra_tenant_id: str | None = None
     entra_client_id: str | None = None
@@ -121,7 +121,7 @@ class Settings(BaseSettings):
     secret_provider: Literal["postgres", "infisical", "aws", "gcp", "azure", "vault"] | None = None
     # Redis/Valkey cache TTL for resolved secret values -- bounds how long a
     # provider outage or a rotated-but-not-yet-invalidated value can linger.
-    secret_cache_ttl_seconds: int = 300
+    secret_cache_ttl_seconds: int | None = None
 
     @field_validator("secret_provider", mode="before")
     @classmethod
