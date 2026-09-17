@@ -97,7 +97,13 @@
       "credentials": [
         { "type": "password", "value": "Admin@2026!Gateway", "temporary": true }
       ],
-      "realmRoles": ["admin"]
+      "realmRoles": ["admin"],
+      "clientRoles": {
+        "realm-management": [
+          "manage-realm",
+          "manage-users"
+        ]
+      }
     },
 
     {
