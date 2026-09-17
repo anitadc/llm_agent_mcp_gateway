@@ -3,6 +3,24 @@
   "enabled": true,
   "sslRequired": "none",
   "registrationAllowed": false,
+  "registrationEmailAsUsername": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+
+  "defaultSignatureAlgorithm": "RS256",
+
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 28800,
+
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+
+  "bruteForceProtected": true,
+
+  "passwordPolicy": "length(14) and digits(1) and lowerCase(1) and upperCase(1) and specialChars(1) and notUsername and passwordHistory(5)",
+
   "roles": {
     "realm": [
       { "name": "admin", "description": "Full administrative access" },
@@ -11,6 +29,21 @@
       { "name": "viewer", "description": "Read-only access" }
     ]
   },
+
+  "groups": [
+    {
+      "name": "default-viewer",
+      "path": "/default-viewer",
+      "realmRoles": [
+        "viewer"
+      ]
+    }
+  ],
+
+  "defaultGroups": [
+    "/default-viewer"
+  ],
+
   "clients": [
     {
       "clientId": "tcsaigateway-frontend",
@@ -18,7 +51,9 @@
       "publicClient": true,
       "protocol": "openid-connect",
       "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
       "redirectUris": ["http://localhost:5173/*"],
       "webOrigins": ["http://localhost:5173"],
       "attributes": {
@@ -38,13 +73,19 @@
         }
       ]
     },
+
     {
       "clientId": "tcsaigateway-backend",
       "enabled": true,
       "bearerOnly": true,
-      "protocol": "openid-connect"
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
     }
   ],
+
   "users": [
     {
       "username": "admin@tcsaigateway.local",
@@ -54,10 +95,11 @@
       "enabled": true,
       "emailVerified": true,
       "credentials": [
-        { "type": "password", "value": "admin123", "temporary": false }
+        { "type": "password", "value": "Admin@2026!Gateway", "temporary": true }
       ],
       "realmRoles": ["admin"]
     },
+
     {
       "username": "team_lead@tcsaigateway.local",
       "email": "team_lead@tcsaigateway.local",
@@ -66,10 +108,11 @@
       "enabled": true,
       "emailVerified": true,
       "credentials": [
-        { "type": "password", "value": "team_lead123", "temporary": false }
+        { "type": "password", "value": "Teamlead@2026!Gateway", "temporary": true }
       ],
       "realmRoles": ["team_lead"]
     },
+
     {
       "username": "developer@tcsaigateway.local",
       "email": "developer@tcsaigateway.local",
@@ -78,10 +121,11 @@
       "enabled": true,
       "emailVerified": true,
       "credentials": [
-        { "type": "password", "value": "developer123", "temporary": false }
+        { "type": "password", "value": "Developer@2026!Gateway", "temporary": true }
       ],
       "realmRoles": ["developer"]
     },
+
     {
       "username": "viewer@tcsaigateway.local",
       "email": "viewer@tcsaigateway.local",
@@ -90,7 +134,7 @@
       "enabled": true,
       "emailVerified": true,
       "credentials": [
-        { "type": "password", "value": "viewer123", "temporary": false }
+        { "type": "password", "value": "Viewer@2026!Gateway", "temporary": true }
       ],
       "realmRoles": ["viewer"]
     }
