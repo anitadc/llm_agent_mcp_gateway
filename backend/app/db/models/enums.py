@@ -12,6 +12,8 @@ class ProviderNameEnum(str, enum.Enum):
     openai = "openai"
     anthropic = "anthropic"
     bedrock = "bedrock"
+    gemini = "gemini"
+    azure = "azure"
 
 
 class RoutingStrategy(str, enum.Enum):

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -32,7 +32,7 @@ class SecretSetRequest(BaseModel):
 
 class SecretSetResponse(BaseModel):
     secret_name: str
-    provider: str
+    provider: Optional[str]
     status: Literal["set", "error"]
 
 

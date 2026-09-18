@@ -88,6 +88,25 @@
 
   "users": [
     {
+      "username": "superadmin@tcsaigateway.local",
+      "email": "superadmin@tcsaigateway.local",
+      "firstName": "Tcsaigateway",
+      "lastName": "Super Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "Superadmin@2026!Gateway", "temporary": true }
+      ],
+      "realmRoles": ["admin"],
+      "clientRoles": {
+        "realm-management": [
+          "realm-admin",
+          "manage-realm",
+          "manage-users"
+        ]
+      }
+    },
+    {
       "username": "admin@tcsaigateway.local",
       "email": "admin@tcsaigateway.local",
       "firstName": "Tcsaigateway",
@@ -97,13 +116,7 @@
       "credentials": [
         { "type": "password", "value": "Admin@2026!Gateway", "temporary": true }
       ],
-      "realmRoles": ["admin"],
-      "clientRoles": {
-        "realm-management": [
-          "manage-realm",
-          "manage-users"
-        ]
-      }
+      "realmRoles": ["admin"]
     },
 
     {

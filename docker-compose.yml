@@ -136,7 +136,7 @@ services:
       # default and remains fully configured for local dev out of the box;
       # switch IDENTITY_PROVIDER + the matching block below to run against an
       # enterprise IdP instead. See docs/identity-provider-architecture.md.
-      IDENTITY_PROVIDER: ${IDENTITY_PROVIDER:-local}
+      IDENTITY_PROVIDER: ${IDENTITY_PROVIDER:-keycloak}
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me}
       ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:-}
       ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:-}

@@ -713,7 +713,7 @@ only records:
 
 1. **Just loading/refreshing the Secrets page** — `GET /admin/secrets/status` runs a
    `get` check for every recognized LLM credential name (`OPENAI_API_KEY`,
-   `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, both `AWS_ACCESS_KEY_ID`/
+   `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS` both `AWS_ACCESS_KEY_ID`/
    `AWS_SECRET_ACCESS_KEY`, `AZURE_OPENAI_KEY` — 6 checks across 5 providers) and logs
    one audit row per check. This is why the log can grow fast even without clicking
    anything — simply opening the page does this every time.

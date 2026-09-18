@@ -5,7 +5,7 @@ import { useToast } from "../components/Toast";
 import { useApi } from "../hooks/useApi";
 import { endpoints } from "../services/api";
 
-const PROVIDERS = ["openai", "anthropic", "bedrock"];
+const PROVIDERS = ["openai", "anthropic", "bedrock", "gemini", "azure"];
 const STRATEGIES = ["priority", "cost", "latency"];
 const CAPABILITIES = ["chat", "embedding"];
 

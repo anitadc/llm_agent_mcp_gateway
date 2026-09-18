@@ -29,7 +29,7 @@ const LLM_PROVIDER_LABELS = {
 const LLM_PROVIDER_SECRET_NAMES = {
   OPENAI: ["OPENAI_API_KEY"],
   ANTHROPIC: ["ANTHROPIC_API_KEY"],
-  GOOGLE_GEMINI: ["GOOGLE_API_KEY"],
+  GOOGLE_GEMINI: ["GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"],
   AWS_BEDROCK: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
   AZURE_OPENAI: ["AZURE_OPENAI_KEY"],
 };
@@ -125,7 +125,7 @@ export function SecretSettings() {
         <h3 className="mb-2 text-sm font-semibold text-gray-700">Set a Secret Value</h3>
         <p className="mb-3 text-xs text-gray-500">
           Writes through to the active Secret Provider above (e.g. <code className="rounded bg-gray-100 px-1">OPENAI_API_KEY</code>,{" "}
-          <code className="rounded bg-gray-100 px-1">ANTHROPIC_API_KEY</code>). The value is never shown again after this form
+          <code className="rounded bg-gray-100 px-1">ANTHROPIC_API_KEY</code>, <code className="rounded bg-gray-100 px-1">GOOGLE_APPLICATION_CREDENTIALS</code>). The value is never shown again after this form
           submits -- only whether the write succeeded is recorded.
         </p>
         <form onSubmit={handleSetSecret} className="flex items-end gap-2">

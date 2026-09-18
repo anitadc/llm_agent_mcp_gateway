@@ -32,7 +32,7 @@ router = APIRouter(prefix="/admin/secrets", tags=["secrets"])
 _LLM_CREDENTIAL_CHECKS: list[tuple[str, list[str]]] = [
     ("OPENAI", ["OPENAI_API_KEY"]),
     ("ANTHROPIC", ["ANTHROPIC_API_KEY"]),
-    ("GOOGLE_GEMINI", ["GOOGLE_API_KEY"]),
+    ("GOOGLE_GEMINI", ["GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"]),
     ("AWS_BEDROCK", ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]),
     ("AZURE_OPENAI", ["AZURE_OPENAI_KEY"]),
 ]
